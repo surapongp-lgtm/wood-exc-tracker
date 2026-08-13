@@ -39,7 +39,7 @@
       <!-- Connection Indicator -->
       <div class="config-info" id="header-conn-status" title="สถานะการเชื่อมต่อ Google Sheets API" onclick="handleHeaderConnClick()" style="cursor: pointer; background: rgba(255,255,255,0.1); padding: 0.25rem 0.625rem; border-radius: 999px; font-size: 0.75rem;">
         <span class="config-status-dot" id="conn-dot"></span>
-        <span id="conn-text" style="color: #cbd5e1;">Demo Mode</span>
+        <span id="conn-text" style="color: #cbd5e1;">ยังไม่ได้เชื่อมต่อ API</span>
       </div>
       
       <!-- Current Logged In User Badge -->
@@ -328,7 +328,7 @@
         
         <div style="max-width: 720px;">
           <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 1.25rem;">
-            คุณสามารถใช้งานโปรแกรมได้ในโหมดทดลอง (Demo Mode) หรือเชื่อมต่อกับ <strong>Google Sheets</strong> ของคุณเองผ่าน Google Apps Script Web App URL เพื่อให้พนักงานและ Admin ใช้งานบันทึกข้อมูลร่วมกันแบบ Real-time
+            โปรแกรมจะเชื่อมต่อกับ <strong>Google Sheets</strong> ของคุณผ่าน Google Apps Script Web App URL เพื่อให้พนักงานและ Admin ใช้งานบันทึกข้อมูลร่วมกันแบบ Real-time
           </p>
 
           <div class="form-group">
@@ -400,9 +400,9 @@
         </button>
       </form>
 
-      <!-- Quick Demo Login Buttons -->
+      <!-- Quick Login Buttons -->
       <div class="quick-demo-login">
-        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">บัญชีทดสอบด่วน (Quick Demo Accounts):</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">บัญชีผู้ใช้เริ่มต้นสำหรับทดสอบเข้าใช้งาน:</div>
         <div style="display: flex; gap: 0.5rem; justify-content: center;">
           <button class="btn btn-outline btn-sm" onclick="quickLogin('admin', 'admin123')">
             <i class="fa-solid fa-user-shield"></i> Admin (admin / admin123)
