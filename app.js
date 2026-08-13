@@ -1,4 +1,4 @@
-/* Wood Exc Sample Tracker - Core Application Logic with Auth & User Management */
+/* Wood Exc Sample Tracker - Core Application Logic with Branch Creation */
 
 // Default Mock Data
 const DEFAULT_BRANCHES = [
@@ -126,7 +126,7 @@ let appState = {
   branches: [],
   logs: [],
   users: [],
-  currentUser: null, // Logged in user object
+  currentUser: null,
   gasUrl: '',
   html5QrScanner: null
 };
@@ -136,7 +136,6 @@ document.addEventListener('DOMContentLoaded', () => {
   loadState();
   initDropdowns();
 
-  // Check login status
   if (!appState.currentUser) {
     showLoginModal();
   } else {
@@ -147,7 +146,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   updateConnStatusUI();
 
-  // Handle URL params for direct scanned QR link (e.g. ?scan=WD-SMP-001)
   const urlParams = new URLSearchParams(window.location.search);
   const scanParam = urlParams.get('scan');
   if (scanParam) {
@@ -188,7 +186,7 @@ function saveState() {
 }
 
 // -----------------------------------------------------------------------------
-// AUTHENTICATION LOGIC
+// AUTHENTICATION LOGIC & PERMISSION GUARDS
 // -----------------------------------------------------------------------------
 
 function showLoginModal() {
@@ -204,7 +202,6 @@ function handleLoginSubmit(e) {
   const uInput = document.getElementById('login-username').value.trim();
   const pInput = document.getElementById('login-password').value.trim();
 
-  // Find user matching username and password
   const user = appState.users.find(u => u.username.toLowerCase() === uInput.toLowerCase() && u.password === pInput);
 
   if (user) {
@@ -246,14 +243,28 @@ function applyUserSession() {
   if (badgeElem) badgeElem.className = `user-account-badge ${u.role}`;
   if (logoutBtn) logoutBtn.style.display = 'inline-flex';
 
-  // Toggle admin-only elements visibility
+  const isAdmin = u.role === 'admin';
   document.querySelectorAll('.admin-only').forEach(el => {
-    el.style.display = u.role === 'admin' ? (el.tagName === 'DIV' || el.tagName === 'TR' ? 'flex' : 'inline-flex') : 'none';
+    el.style.display = isAdmin ? (el.tagName === 'DIV' || el.tagName === 'TR' ? 'flex' : 'inline-flex') : 'none';
   });
 
-  // Default pre-fill staff name on location updates
+  if (!isAdmin) {
+    const activeSection = document.querySelector('.view-section.active');
+    if (activeSection && (activeSection.id === 'settings-tab' || activeSection.id === 'users-tab')) {
+      switchTab('scan-tab');
+    }
+  }
+
   if (document.getElementById('update-staff-name')) {
     document.getElementById('update-staff-name').value = u.name;
+  }
+}
+
+function handleHeaderConnClick() {
+  if (appState.currentUser && appState.currentUser.role === 'admin') {
+    switchTab('settings-tab');
+  } else {
+    showToast('คุณไม่มีสิทธิ์เข้าถึงเมนูตั้งค่า Google Sheets API (เฉพาะผู้ดูแลระบบ Admin เท่านั้น)', 'error');
   }
 }
 
@@ -272,8 +283,70 @@ function initDropdowns() {
   if (userBranch) userBranch.innerHTML = branchOptionsHtml;
 }
 
-// Tab Switcher Logic
+// -----------------------------------------------------------------------------
+// BRANCH MANAGEMENT LOGIC (AVAILABLE TO ADMIN AND STAFF)
+// -----------------------------------------------------------------------------
+
+function openAddBranchModal() {
+  const nextNum = appState.branches.length + 1;
+  const newId = 'BR-' + String(nextNum).padStart(2, '0');
+  
+  document.getElementById('new-branch-name').value = '';
+  document.getElementById('new-branch-id').value = newId;
+  document.getElementById('new-branch-address').value = '';
+  document.getElementById('add-branch-modal').classList.add('active');
+}
+
+function closeAddBranchModal() {
+  document.getElementById('add-branch-modal').classList.remove('active');
+}
+
+function handleAddBranchSubmit(e) {
+  e.preventDefault();
+  const bName = document.getElementById('new-branch-name').value.trim();
+  const bId = document.getElementById('new-branch-id').value.trim();
+  const bAddress = document.getElementById('new-branch-address').value.trim();
+
+  if (!bName) return;
+
+  if (appState.branches.some(b => b.name.toLowerCase() === bName.toLowerCase())) {
+    showToast(`สาขา [${bName}] มีในระบบเรียบร้อยแล้ว`, 'error');
+    return;
+  }
+
+  const newBranch = {
+    id: bId,
+    name: bName,
+    address: bAddress || 'ไม่ระบุที่อยู่'
+  };
+
+  appState.branches.push(newBranch);
+  saveState();
+  initDropdowns();
+  
+  // Select newly created branch in update and add forms
+  const updateBranchSelect = document.getElementById('update-branch-select');
+  const addBranchSelect = document.getElementById('add-branch');
+  if (updateBranchSelect) updateBranchSelect.value = newBranch.id;
+  if (addBranchSelect) addBranchSelect.value = newBranch.id;
+
+  closeAddBranchModal();
+  renderDashboard();
+  showToast(`เพิ่มสาขาใหม่ [${bName}] เรียบร้อยแล้ว`, 'success');
+
+  if (appState.gasUrl) {
+    syncBranchToGas(newBranch);
+  }
+}
+
+// Tab Switcher Logic with Permission Guard
 function switchTab(tabId) {
+  const isAdmin = appState.currentUser && appState.currentUser.role === 'admin';
+  if ((tabId === 'settings-tab' || tabId === 'users-tab') && !isAdmin) {
+    showToast('คุณไม่มีสิทธิ์เข้าถึงเมนูนี้ (เฉพาะผู้ดูแลระบบ Admin เท่านั้น)', 'error');
+    tabId = 'scan-tab';
+  }
+
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
 
@@ -463,7 +536,6 @@ function openUpdateModalForCode(itemCode) {
   document.getElementById('update-location-detail').value = p.location || '';
   document.getElementById('update-status-select').value = p.status || 'On Display';
   
-  // Pre-fill staff name with current logged in user name
   if (appState.currentUser) {
     document.getElementById('update-staff-name').value = appState.currentUser.name;
   } else {
@@ -864,8 +936,13 @@ function printQrCard() {
   window.print();
 }
 
-// 7. GOOGLE SHEETS API INTEGRATION
+// 7. GOOGLE SHEETS API INTEGRATION (ADMIN ONLY FOR CONFIG)
 function saveGasUrl() {
+  if (!appState.currentUser || appState.currentUser.role !== 'admin') {
+    showToast('คุณไม่มีสิทธิ์ปรับแต่ง Web App URL (เฉพาะ Admin เท่านั้น)', 'error');
+    return;
+  }
+
   const url = document.getElementById('gas-url-input').value.trim();
   appState.gasUrl = url;
   saveState();
@@ -887,6 +964,11 @@ function updateConnStatusUI() {
 }
 
 async function testGasConnection() {
+  if (!appState.currentUser || appState.currentUser.role !== 'admin') {
+    showToast('คุณไม่มีสิทธิ์ทดสอบการเชื่อมต่อ API (เฉพาะ Admin เท่านั้น)', 'error');
+    return;
+  }
+
   if (!appState.gasUrl) {
     showToast('โปรดกรอก Google Apps Script Web App URL ก่อนกดทดสอบ', 'error');
     return;
@@ -968,12 +1050,31 @@ async function syncUserToGas(newUser) {
   }
 }
 
+async function syncBranchToGas(newBranch) {
+  if (!appState.gasUrl) return;
+
+  try {
+    await fetch(appState.gasUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'addBranch',
+        branch: newBranch
+      })
+    });
+  } catch (err) {
+    console.warn('Failed sync branch to Google Sheets:', err);
+  }
+}
+
 function downloadGasScriptCode() {
-  const gasCode = `// Google Apps Script (Code.gs) Code for Sample Tracker App with User Auth
+  const gasCode = `// Google Apps Script (Code.gs) Code for Sample Tracker App with User Auth & Branch Adding
 function doGet(e) {
   const action = e.parameter.action;
   if (action === 'getProducts') return respondJson(getAllProductsWithLocation());
   if (action === 'getUsers') return respondJson(getAllUsers());
+  if (action === 'getBranches') return respondJson({status: 'success', branches: getAllBranches()});
   return respondJson({status: 'online', msg: 'Wood Exc API Ready'});
 }
 
@@ -983,6 +1084,7 @@ function doPost(e) {
     if (data.action === 'updateLocation') updateLocationAndLog(data.product, data.log);
     else if (data.action === 'addProduct') createNewProduct(data.product);
     else if (data.action === 'addUser') createNewUser(data.user);
+    else if (data.action === 'addBranch') createNewBranch(data.branch);
     return respondJson({status: 'success'});
   } catch(err) {
     return respondJson({status: 'error', error: err.toString()});

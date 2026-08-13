@@ -37,7 +37,7 @@
     
     <div class="header-actions">
       <!-- Connection Indicator -->
-      <div class="config-info" id="header-conn-status" title="คลิกเพื่อตั้งค่า Google Sheets API" onclick="switchTab('settings-tab')" style="cursor: pointer; background: rgba(255,255,255,0.1); padding: 0.25rem 0.625rem; border-radius: 999px; font-size: 0.75rem;">
+      <div class="config-info" id="header-conn-status" title="สถานะการเชื่อมต่อ Google Sheets API" onclick="handleHeaderConnClick()" style="cursor: pointer; background: rgba(255,255,255,0.1); padding: 0.25rem 0.625rem; border-radius: 999px; font-size: 0.75rem;">
         <span class="config-status-dot" id="conn-dot"></span>
         <span id="conn-text" style="color: #cbd5e1;">Demo Mode</span>
       </div>
@@ -72,7 +72,8 @@
     <div class="nav-item admin-only" onclick="switchTab('users-tab')" id="tab-btn-users" style="display: none;">
       <i class="fa-solid fa-users-gear"></i> จัดการผู้ใช้งาน
     </div>
-    <div class="nav-item" onclick="switchTab('settings-tab')" id="tab-btn-settings">
+    <!-- Settings Tab is strictly ADMIN ONLY -->
+    <div class="nav-item admin-only" onclick="switchTab('settings-tab')" id="tab-btn-settings" style="display: none;">
       <i class="fa-solid fa-sliders"></i> ตั้งค่า Google Sheet API
     </div>
   </nav>
@@ -216,9 +217,14 @@
           <div class="card-title">
             <i class="fa-solid fa-city" style="color: #2563eb;"></i> สรุปจำนวนตัวอย่างสินค้าแยกตามสาขา
           </div>
-          <button class="btn btn-secondary btn-sm" onclick="renderDashboard()">
-            <i class="fa-solid fa-rotate-right"></i> รีเฟรชข้อมูล
-          </button>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-primary btn-sm" onclick="openAddBranchModal()">
+              <i class="fa-solid fa-plus-circle"></i> เพิ่มสาขา/คลังใหม่
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="renderDashboard()">
+              <i class="fa-solid fa-rotate-right"></i> รีเฟรชข้อมูล
+            </button>
+          </div>
         </div>
         <div class="table-responsive">
           <table class="data-table">
@@ -311,12 +317,12 @@
       </div>
     </section>
 
-    <!-- 6. GOOGLE SHEETS API SETTINGS TAB -->
+    <!-- 6. GOOGLE SHEETS API SETTINGS TAB (STRICTLY ADMIN ONLY) -->
     <section id="settings-tab" class="view-section">
       <div class="card-container">
         <div class="card-header">
           <div class="card-title">
-            <i class="fa-solid fa-link" style="color: #10b981;"></i> ตั้งค่าการเชื่อมต่อ Google Sheets Backend API
+            <i class="fa-solid fa-link" style="color: #10b981;"></i> ตั้งค่าการเชื่อมต่อ Google Sheets Backend API (เฉพาะ Admin)
           </div>
         </div>
         
@@ -464,7 +470,12 @@
           <input type="hidden" id="update-item-id">
           
           <div class="form-group">
-            <label class="form-label" for="update-branch-select">สาขาปัจจุบันที่วางจัดแสดง/จัดเก็บ <span style="color:red;">*</span></label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.375rem;">
+              <label class="form-label" for="update-branch-select" style="margin-bottom: 0;">สาขาปัจจุบันที่วางจัดแสดง/จัดเก็บ <span style="color:red;">*</span></label>
+              <button type="button" class="btn btn-outline btn-sm" onclick="openAddBranchModal()" style="padding: 0.15rem 0.5rem; font-size: 0.75rem;">
+                <i class="fa-solid fa-plus"></i> เพิ่มสาขาใหม่
+              </button>
+            </div>
             <select id="update-branch-select" class="form-control" required>
               <!-- Filled via JS -->
             </select>
@@ -549,7 +560,12 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label">สาขาที่จัดวางเริ่มต้น <span style="color:red;">*</span></label>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.375rem;">
+              <label class="form-label" style="margin-bottom: 0;">สาขาที่จัดวางเริ่มต้น <span style="color:red;">*</span></label>
+              <button type="button" class="btn btn-outline btn-sm" onclick="openAddBranchModal()" style="padding: 0.15rem 0.5rem; font-size: 0.75rem;">
+                <i class="fa-solid fa-plus"></i> เพิ่มสาขาใหม่
+              </button>
+            </div>
             <select id="add-branch" class="form-control" required>
               <!-- Filled via JS -->
             </select>
@@ -569,7 +585,44 @@
     </div>
   </div>
 
-  <!-- 4. Add / Edit User Modal (Admin Only) -->
+  <!-- 4. Add New Branch Modal (Admin & Staff) -->
+  <div class="modal-overlay" id="add-branch-modal">
+    <div class="modal-content" style="max-width: 440px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-building-circle-check" style="color: #10b981;"></i> เพิ่มรายชื่อสาขา/คลังใหม่
+        </div>
+        <button class="btn-close" onclick="closeAddBranchModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="add-branch-form" onsubmit="handleAddBranchSubmit(event)">
+          <div class="form-group">
+            <label class="form-label">ชื่อสาขา / สถานที่จัดเก็บ <span style="color:red;">*</span></label>
+            <input type="text" id="new-branch-name" class="form-control" placeholder="เช่น สาขาเชียงใหม่, บูธไบเทคบางนา, คลังพัทยา" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">รหัสสาขา (Auto-generated)</label>
+            <input type="text" id="new-branch-id" class="form-control" placeholder="เช่น BR-05" readonly style="background: #f1f5f9; font-family: monospace;">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">ที่อยู่ / รายละเอียดสถานที่เพิ่มเติม</label>
+            <input type="text" id="new-branch-address" class="form-control" placeholder="เช่น อ.เมือง จ.เชียงใหม่">
+          </div>
+
+          <div class="modal-footer" style="padding-right: 0; padding-bottom: 0;">
+            <button type="button" class="btn btn-secondary" onclick="closeAddBranchModal()">ยกเลิก</button>
+            <button type="submit" class="btn btn-primary">
+              <i class="fa-solid fa-plus-circle"></i> บันทึกสาขาใหม่
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Add / Edit User Modal (Admin Only) -->
   <div class="modal-overlay" id="add-user-modal">
     <div class="modal-content">
       <div class="modal-header">
@@ -621,7 +674,7 @@
     </div>
   </div>
 
-  <!-- 5. QR Code Print Tag Modal -->
+  <!-- 6. QR Code Print Tag Modal -->
   <div class="modal-overlay" id="qr-print-modal">
     <div class="modal-content">
       <div class="modal-header">

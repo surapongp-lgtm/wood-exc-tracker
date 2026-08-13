@@ -1,9 +1,9 @@
 /**
  * ==============================================================================
- * Wood Exc Sample Tracker - Google Apps Script (Code.gs) with User Authentication
+ * Wood Exc Sample Tracker - Google Apps Script (Code.gs) with User Auth & Branch Management
  * ==============================================================================
  * สคริปต์นี้ใช้สำหรับติดตั้งใน Google Sheets ( Extensions > Apps Script )
- * รองรับระบบติดตามสินค้าตัวอย่าง และระบบจัดเก็บบัญชีผู้ใช้งาน/รหัสผ่าน (Users Sheet)
+ * รองรับระบบติดตามสินค้าตัวอย่าง, บัญชีผู้ใช้, และการเพิ่มรายชื่อสาขา/คลังจัดเก็บใหม่
  */
 
 // ชื่อชีตหลักในไฟล์ Google Sheets
@@ -30,12 +30,12 @@ function setupDatabaseSheets() {
   // 2. Sheet Branches
   let bSheet = ss.getSheetByName(SHEET_BRANCHES) || ss.insertSheet(SHEET_BRANCHES);
   if (bSheet.getLastRow() === 0) {
-    bSheet.appendRow(["branch_id", "branch_name", "contact_person", "phone"]);
-    bSheet.getRange(1, 1, 1, 4).setFontWeight("bold").setBackground("#f1f5f9");
-    bSheet.appendRow(["BR-01", "สาขาบางนา (Showroom Bangna)", "คุณสมหญิง", "02-111-1111"]);
-    bSheet.appendRow(["BR-02", "สาขารามอินทรา (Ramindra)", "คุณวิชัย", "02-222-2222"]);
-    bSheet.appendRow(["BR-03", "สาขาภูเก็ต (Phuket Branch)", "คุณอนันต์", "076-333-333"]);
-    bSheet.appendRow(["BR-04", "คลังสินค้าหลัก (Central Warehouse)", "คุณสมชาย", "02-444-4444"]);
+    bSheet.appendRow(["branch_id", "branch_name", "contact_person", "phone", "address"]);
+    bSheet.getRange(1, 1, 1, 5).setFontWeight("bold").setBackground("#f1f5f9");
+    bSheet.appendRow(["BR-01", "สาขาบางนา (Showroom Bangna)", "คุณสมหญิง", "02-111-1111", "ถนนบางนา-ตราด กม. 4"]);
+    bSheet.appendRow(["BR-02", "สาขารามอินทรา (Ramindra)", "คุณวิชัย", "02-222-2222", "ถนนรามอินทรา กม. 8"]);
+    bSheet.appendRow(["BR-03", "สาขาภูเก็ต (Phuket Branch)", "คุณอนันต์", "076-333-333", "อ.เมือง จ.ภูเก็ต"]);
+    bSheet.appendRow(["BR-04", "คลังสินค้าหลัก (Central Warehouse)", "คุณสมชาย", "02-444-4444", "กิ่งแก้ว สมุทรปราการ"]);
   }
 
   // 3. Sheet Current_Placement
@@ -75,13 +75,15 @@ function doGet(e) {
     return respondJson(getAllProductsWithLocation());
   } else if (action === 'getUsers') {
     return respondJson({ status: 'success', users: getAllUsers() });
+  } else if (action === 'getBranches') {
+    return respondJson({ status: 'success', branches: getAllBranches() });
   } else if (action === 'getLogs') {
     return respondJson({ status: 'success', logs: getScanLogs() });
   }
 
   return respondJson({
     status: 'online',
-    appName: 'Wood Exc Sample Tracker Backend API with Auth',
+    appName: 'Wood Exc Sample Tracker Backend API with Auth & Branch Management',
     time: new Date().toString()
   });
 }
@@ -104,6 +106,9 @@ function doPost(e) {
     } else if (action === 'addUser') {
       createNewUser(postData.user);
       return respondJson({ status: 'success', message: 'New user added' });
+    } else if (action === 'addBranch') {
+      createNewBranch(postData.branch);
+      return respondJson({ status: 'success', message: 'New branch added' });
     } else if (action === 'updatePassword') {
       updateUserPassword(postData.username, postData.newPassword);
       return respondJson({ status: 'success', message: 'Password updated' });
@@ -289,6 +294,38 @@ function createNewUser(user) {
     user.role,
     user.branch,
     now
+  ]);
+}
+
+function getAllBranches() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const bSheet = ss.getSheetByName(SHEET_BRANCHES);
+  const data = bSheet.getDataRange().getValues();
+
+  const branches = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (!row[0]) continue;
+    branches.push({
+      id: row[0],
+      name: row[1],
+      contact: row[2],
+      phone: row[3],
+      address: row[4]
+    });
+  }
+  return branches;
+}
+
+function createNewBranch(branch) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const bSheet = ss.getSheetByName(SHEET_BRANCHES);
+  bSheet.appendRow([
+    branch.id,
+    branch.name,
+    '-',
+    '-',
+    branch.address || ''
   ]);
 }
 
