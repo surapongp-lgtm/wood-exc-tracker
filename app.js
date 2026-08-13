@@ -1,0 +1,1018 @@
+/* Wood Exc Sample Tracker - Core Application Logic with Auth & User Management */
+
+// Default Mock Data
+const DEFAULT_BRANCHES = [
+  { id: 'BR-01', name: 'สาขาบางนา (Showroom Bangna)', address: 'ถนนบางนา-ตราด กม. 4' },
+  { id: 'BR-02', name: 'สาขารามอินทรา (Ramindra)', address: 'ถนนรามอินทรา กม. 8' },
+  { id: 'BR-03', name: 'สาขาภูเก็ต (Phuket Branch)', address: 'อ.เมือง จ.ภูเก็ต' },
+  { id: 'BR-04', name: 'คลังสินค้าหลัก (Central Warehouse)', address: 'กิ่งแก้ว สมุทรปราการ' }
+];
+
+const DEFAULT_USERS = [
+  {
+    userId: 'U001',
+    username: 'admin',
+    password: 'admin123',
+    name: 'ผู้ดูแลระบบ (Central Admin)',
+    role: 'admin',
+    branch: 'BR-04',
+    createdAt: '2026-08-13 08:00:00'
+  },
+  {
+    userId: 'U002',
+    username: 'staff_bangna',
+    password: 'staff123',
+    name: 'สมหญิง ใจดี (บางนา)',
+    role: 'staff',
+    branch: 'BR-01',
+    createdAt: '2026-08-13 08:15:00'
+  },
+  {
+    userId: 'U003',
+    username: 'staff_ramindra',
+    password: 'staff123',
+    name: 'วิชัย มั่นคง (รามอินทรา)',
+    role: 'staff',
+    branch: 'BR-02',
+    createdAt: '2026-08-13 08:30:00'
+  }
+];
+
+const DEFAULT_PRODUCTS = [
+  {
+    code: 'WD-SMP-001',
+    name: 'ไม้พื้นลามิเนต Oak Natural 12mm',
+    category: 'ไม้พื้น (Flooring)',
+    spec: 'สีโอ๊คธรรมชาติ, ผิวเสี้ยนไม้เรียบ, กันรอยขีดข่วน AC4',
+    img: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80',
+    branch: 'BR-01',
+    location: 'ชั้นวาง A2 โซนหน้าโชว์รูม',
+    status: 'On Display',
+    updatedBy: 'สมหญิง ใจดี (บางนา)',
+    updatedAt: '2026-08-13 08:30:00',
+    notes: 'ตัวอย่างติดป้ายราคาสมบูรณ์'
+  },
+  {
+    code: 'WD-SMP-002',
+    name: 'ไม้สังเคราะห์ WPC Teak Decking 25mm',
+    category: 'ไม้พื้น (Flooring)',
+    spec: 'สีไม้สักทอง, ผิวลอนร่องกลม, สำหรับงานภายนอก',
+    img: 'https://images.unsplash.com/photo-1546484475-7f7bd55792da?w=300&q=80',
+    branch: 'BR-02',
+    location: 'แท่นโชว์กลางแจ้ง บูธ B1',
+    status: 'On Display',
+    updatedBy: 'วิชัย มั่นคง (รามอินทรา)',
+    updatedAt: '2026-08-13 09:00:00',
+    notes: 'ทดสอบตากแดดตากฝน'
+  },
+  {
+    code: 'WD-SMP-003',
+    name: 'ไม้ระแนงผนัง WPC Charcoal Grey',
+    category: 'ไม้ระแนง (Louver)',
+    spec: 'สีเทาชาร์โคล, สเปก 3D Groove, กันน้ำ 100%',
+    img: 'https://images.unsplash.com/photo-1615873968403-89e068629265?w=300&q=80',
+    branch: 'BR-01',
+    location: 'สต็อกชั้น 3 ตู้คลัง B',
+    status: 'In Storage',
+    updatedBy: 'สมหญิง ใจดี (บางนา)',
+    updatedAt: '2026-08-12 16:45:00',
+    notes: 'พร้อมส่งไปโชว์ที่สาขาภูเก็ต'
+  },
+  {
+    code: 'WD-SMP-004',
+    name: 'ไม้ผนังตกแต่ง Pine Wood Thermo 18mm',
+    category: 'ไม้ผนัง/ฝ้า (Cladding)',
+    spec: 'ไม้สนอบความร้อน Thermo Pine, อบกันปลวก 100%',
+    img: 'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=300&q=80',
+    branch: 'BR-04',
+    location: 'โซนจัดเตรียมสินค้าขนส่ง',
+    status: 'In Transit',
+    updatedBy: 'ผู้ดูแลระบบ (Central Admin)',
+    updatedAt: '2026-08-13 07:15:00',
+    notes: 'กำลังจัดส่งไปสาขาภูเก็ต'
+  }
+];
+
+const DEFAULT_LOGS = [
+  {
+    id: 'LOG-1001',
+    timestamp: '2026-08-13 09:00:00',
+    code: 'WD-SMP-002',
+    name: 'ไม้สังเคราะห์ WPC Teak Decking 25mm',
+    action: 'UPDATE_LOCATION',
+    branch: 'BR-02',
+    branchName: 'สาขารามอินทรา (Ramindra)',
+    location: 'แท่นโชว์กลางแจ้ง บูธ B1',
+    status: 'On Display',
+    staff: 'วิชัย มั่นคง (รามอินทรา)'
+  },
+  {
+    id: 'LOG-1000',
+    timestamp: '2026-08-13 08:30:00',
+    code: 'WD-SMP-001',
+    name: 'ไม้พื้นลามิเนต Oak Natural 12mm',
+    action: 'CHECK_IN',
+    branch: 'BR-01',
+    branchName: 'สาขาบางนา (Showroom Bangna)',
+    location: 'ชั้นวาง A2 โซนหน้าโชว์รูม',
+    status: 'On Display',
+    staff: 'สมหญิง ใจดี (บางนา)'
+  }
+];
+
+// Application State
+let appState = {
+  products: [],
+  branches: [],
+  logs: [],
+  users: [],
+  currentUser: null, // Logged in user object
+  gasUrl: '',
+  html5QrScanner: null
+};
+
+// Initialization on DOM Load
+document.addEventListener('DOMContentLoaded', () => {
+  loadState();
+  initDropdowns();
+
+  // Check login status
+  if (!appState.currentUser) {
+    showLoginModal();
+  } else {
+    hideLoginModal();
+    applyUserSession();
+    renderCurrentTab();
+  }
+
+  updateConnStatusUI();
+
+  // Handle URL params for direct scanned QR link (e.g. ?scan=WD-SMP-001)
+  const urlParams = new URLSearchParams(window.location.search);
+  const scanParam = urlParams.get('scan');
+  if (scanParam) {
+    setTimeout(() => {
+      processScannedQr(scanParam);
+    }, 500);
+  }
+});
+
+// State Persistence (Local Storage)
+function loadState() {
+  const savedProducts = localStorage.getItem('wood_exc_products');
+  const savedBranches = localStorage.getItem('wood_exc_branches');
+  const savedLogs = localStorage.getItem('wood_exc_logs');
+  const savedUsers = localStorage.getItem('wood_exc_users');
+  const savedCurrentUser = localStorage.getItem('wood_exc_current_user');
+  const savedGasUrl = localStorage.getItem('wood_exc_gas_url');
+
+  appState.products = savedProducts ? JSON.parse(savedProducts) : DEFAULT_PRODUCTS;
+  appState.branches = savedBranches ? JSON.parse(savedBranches) : DEFAULT_BRANCHES;
+  appState.logs = savedLogs ? JSON.parse(savedLogs) : DEFAULT_LOGS;
+  appState.users = savedUsers ? JSON.parse(savedUsers) : DEFAULT_USERS;
+  appState.currentUser = savedCurrentUser ? JSON.parse(savedCurrentUser) : null;
+  appState.gasUrl = savedGasUrl || '';
+
+  if (document.getElementById('gas-url-input')) {
+    document.getElementById('gas-url-input').value = appState.gasUrl;
+  }
+}
+
+function saveState() {
+  localStorage.setItem('wood_exc_products', JSON.stringify(appState.products));
+  localStorage.setItem('wood_exc_branches', JSON.stringify(appState.branches));
+  localStorage.setItem('wood_exc_logs', JSON.stringify(appState.logs));
+  localStorage.setItem('wood_exc_users', JSON.stringify(appState.users));
+  localStorage.setItem('wood_exc_current_user', JSON.stringify(appState.currentUser));
+  localStorage.setItem('wood_exc_gas_url', appState.gasUrl);
+}
+
+// -----------------------------------------------------------------------------
+// AUTHENTICATION LOGIC
+// -----------------------------------------------------------------------------
+
+function showLoginModal() {
+  document.getElementById('login-modal').classList.add('active');
+}
+
+function hideLoginModal() {
+  document.getElementById('login-modal').classList.remove('active');
+}
+
+function handleLoginSubmit(e) {
+  e.preventDefault();
+  const uInput = document.getElementById('login-username').value.trim();
+  const pInput = document.getElementById('login-password').value.trim();
+
+  // Find user matching username and password
+  const user = appState.users.find(u => u.username.toLowerCase() === uInput.toLowerCase() && u.password === pInput);
+
+  if (user) {
+    appState.currentUser = user;
+    saveState();
+    hideLoginModal();
+    applyUserSession();
+    renderCurrentTab();
+    showToast(`ยินดีต้อนรับคุณ ${user.name} (${user.role === 'admin' ? 'Admin' : 'Staff'})`, 'success');
+  } else {
+    showToast('Username หรือ Password ไม่ถูกต้อง!', 'error');
+  }
+}
+
+function quickLogin(username, password) {
+  document.getElementById('login-username').value = username;
+  document.getElementById('login-password').value = password;
+  const fakeEvent = { preventDefault: () => {} };
+  handleLoginSubmit(fakeEvent);
+}
+
+function handleLogout() {
+  if (confirm('คุณต้องการออกจากระบบใช่หรือไม่?')) {
+    appState.currentUser = null;
+    saveState();
+    location.reload();
+  }
+}
+
+function applyUserSession() {
+  const u = appState.currentUser;
+  if (!u) return;
+
+  const nameElem = document.getElementById('current-user-name');
+  const badgeElem = document.getElementById('current-user-badge');
+  const logoutBtn = document.getElementById('logout-btn');
+
+  if (nameElem) nameElem.innerText = `${u.name} (${u.role === 'admin' ? '👑 Admin' : '👤 Staff'})`;
+  if (badgeElem) badgeElem.className = `user-account-badge ${u.role}`;
+  if (logoutBtn) logoutBtn.style.display = 'inline-flex';
+
+  // Toggle admin-only elements visibility
+  document.querySelectorAll('.admin-only').forEach(el => {
+    el.style.display = u.role === 'admin' ? (el.tagName === 'DIV' || el.tagName === 'TR' ? 'flex' : 'inline-flex') : 'none';
+  });
+
+  // Default pre-fill staff name on location updates
+  if (document.getElementById('update-staff-name')) {
+    document.getElementById('update-staff-name').value = u.name;
+  }
+}
+
+// Dropdown Populators
+function initDropdowns() {
+  const invBranchFilter = document.getElementById('inv-branch-filter');
+  const updateBranchSelect = document.getElementById('update-branch-select');
+  const addBranch = document.getElementById('add-branch');
+  const userBranch = document.getElementById('user-branch');
+
+  let branchOptionsHtml = appState.branches.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+  
+  if (invBranchFilter) invBranchFilter.innerHTML = '<option value="">ทุกสาขา</option>' + branchOptionsHtml;
+  if (updateBranchSelect) updateBranchSelect.innerHTML = branchOptionsHtml;
+  if (addBranch) addBranch.innerHTML = branchOptionsHtml;
+  if (userBranch) userBranch.innerHTML = branchOptionsHtml;
+}
+
+// Tab Switcher Logic
+function switchTab(tabId) {
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+
+  const btnMap = {
+    'scan-tab': 'tab-btn-scan',
+    'inventory-tab': 'tab-btn-inventory',
+    'dashboard-tab': 'tab-btn-dashboard',
+    'logs-tab': 'tab-btn-logs',
+    'users-tab': 'tab-btn-users',
+    'settings-tab': 'tab-btn-settings'
+  };
+
+  if (document.getElementById(btnMap[tabId])) {
+    document.getElementById(btnMap[tabId]).classList.add('active');
+  }
+
+  const section = document.getElementById(tabId);
+  if (section) {
+    section.classList.add('active');
+    if (tabId === 'scan-tab') renderQuickItems();
+    if (tabId === 'inventory-tab') renderInventoryTable();
+    if (tabId === 'dashboard-tab') renderDashboard();
+    if (tabId === 'logs-tab') renderLogsTable();
+    if (tabId === 'users-tab') renderUsersTable();
+  }
+}
+
+function renderCurrentTab() {
+  renderQuickItems();
+  renderInventoryTable();
+  renderDashboard();
+  renderLogsTable();
+  renderUsersTable();
+}
+
+// Helper: Get Branch Name
+function getBranchName(branchId) {
+  const found = appState.branches.find(b => b.id === branchId);
+  return found ? found.name : branchId;
+}
+
+// Helper: Status Badge HTML
+function getStatusBadge(status) {
+  switch (status) {
+    case 'On Display':
+      return `<span class="badge badge-display"><i class="fa-solid fa-store"></i> On Display (จัดแสดง)</span>`;
+    case 'In Storage':
+      return `<span class="badge badge-storage"><i class="fa-solid fa-warehouse"></i> In Storage (ในคลัง)</span>`;
+    case 'In Transit':
+      return `<span class="badge badge-transit"><i class="fa-solid fa-truck"></i> In Transit (กำลังย้าย)</span>`;
+    case 'Damaged':
+      return `<span class="badge badge-damaged"><i class="fa-solid fa-triangle-exclamation"></i> Damaged (ชำรุด)</span>`;
+    default:
+      return `<span class="badge badge-storage">${status}</span>`;
+  }
+}
+
+// 1. SCAN TAB LOGIC
+function renderQuickItems() {
+  const tbody = document.getElementById('quick-items-tbody');
+  const searchVal = (document.getElementById('quick-search-input')?.value || '').toLowerCase();
+  if (!tbody) return;
+
+  const filtered = appState.products.filter(p => 
+    p.name.toLowerCase().includes(searchVal) || 
+    p.code.toLowerCase().includes(searchVal) || 
+    getBranchName(p.branch).toLowerCase().includes(searchVal)
+  );
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">ไม่พบข้อมูลสินค้าตัวอย่าง</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(p => `
+    <tr>
+      <td>
+        <div class="product-cell">
+          <img src="${p.img || 'https://via.placeholder.com/80'}" class="product-img-thumb" alt="${p.name}">
+          <div class="product-meta">
+            <div class="item-title">${p.name}</div>
+            <div class="item-code">${p.code}</div>
+          </div>
+        </div>
+      </td>
+      <td><strong>${getBranchName(p.branch)}</strong></td>
+      <td>${p.location || '-'}</td>
+      <td>${getStatusBadge(p.status)}</td>
+      <td style="font-size: 0.75rem; color: var(--text-muted);">${p.updatedAt || '-'}</td>
+      <td style="text-align: right;">
+        <button class="btn btn-primary btn-sm" onclick="openUpdateModalForCode('${p.code}')">
+          <i class="fa-solid fa-pen-to-square"></i> อัปเดตจุดวาง
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function filterQuickItems() {
+  renderQuickItems();
+}
+
+// QR Code Scanner Camera Modal
+function openScannerModal() {
+  document.getElementById('scanner-modal').classList.add('active');
+  initCameraScanner();
+}
+
+function closeScannerModal() {
+  document.getElementById('scanner-modal').classList.remove('active');
+  stopCameraScanner();
+}
+
+function initCameraScanner() {
+  if (appState.html5QrScanner) {
+    stopCameraScanner();
+  }
+
+  appState.html5QrScanner = new Html5Qrcode("qr-reader");
+  const config = { fps: 10, qrbox: { width: 220, height: 220 } };
+
+  appState.html5QrScanner.start(
+    { facingMode: "environment" },
+    config,
+    (decodedText) => {
+      closeScannerModal();
+      processScannedQr(decodedText);
+    },
+    (errorMessage) => {
+      // Scanning...
+    }
+  ).catch(err => {
+    console.warn("Camera access failed:", err);
+    document.getElementById('qr-reader-container').innerHTML = `
+      <div style="padding: 1.5rem; text-align: center; color: #cbd5e1;">
+        <i class="fa-solid fa-camera-slash" style="font-size: 2rem; margin-bottom: 0.5rem; color: #ef4444;"></i>
+        <p>ไม่สามารถเปิดกล้องได้ (หรืออุปกรณ์ไม่มีกล้อง)</p>
+        <p style="font-size: 0.75rem; color: #94a3b8; margin-top: 0.25rem;">โปรดใช้วิธีพิมพ์รหัสหรือเลือกลิสต์สินค้าทดแทน</p>
+      </div>
+    `;
+  });
+}
+
+function stopCameraScanner() {
+  if (appState.html5QrScanner) {
+    appState.html5QrScanner.stop().then(() => {
+      appState.html5QrScanner.clear();
+      appState.html5QrScanner = null;
+    }).catch(err => {
+      console.error(err);
+      appState.html5QrScanner = null;
+    });
+  }
+}
+
+function processScannedQr(qrData) {
+  if (!qrData) return;
+  const cleanCode = qrData.trim();
+  
+  const product = appState.products.find(p => p.code.toLowerCase() === cleanCode.toLowerCase());
+
+  if (product) {
+    showToast(`พบสินค้า: ${product.name}`, 'success');
+    openUpdateModalForCode(product.code);
+  } else {
+    showToast(`ไม่พบรหัสสินค้า: ${cleanCode} ในระบบ`, 'error');
+    if (appState.currentUser && appState.currentUser.role === 'admin') {
+      if (confirm(`ไม่พบรหัส ${cleanCode} ในระบบ ต้องการเพิ่มเป็นสินค้าตัวอย่างใหม่หรือไม่?`)) {
+        openAddProductModal(cleanCode);
+      }
+    }
+  }
+}
+
+// Update Modal Form
+function openUpdateModalForCode(itemCode) {
+  const p = appState.products.find(x => x.code === itemCode);
+  if (!p) return;
+
+  document.getElementById('update-item-id').value = p.code;
+  document.getElementById('update-item-name').innerText = p.name;
+  document.getElementById('update-item-code').innerText = p.code;
+  document.getElementById('update-item-spec').innerText = p.spec || p.category;
+  document.getElementById('update-item-img').src = p.img || 'https://via.placeholder.com/80';
+  
+  document.getElementById('update-branch-select').value = p.branch;
+  document.getElementById('update-location-detail').value = p.location || '';
+  document.getElementById('update-status-select').value = p.status || 'On Display';
+  
+  // Pre-fill staff name with current logged in user name
+  if (appState.currentUser) {
+    document.getElementById('update-staff-name').value = appState.currentUser.name;
+  } else {
+    document.getElementById('update-staff-name').value = p.updatedBy || '';
+  }
+
+  document.getElementById('update-notes').value = p.notes || '';
+  document.getElementById('update-modal').classList.add('active');
+}
+
+function closeUpdateModal() {
+  document.getElementById('update-modal').classList.remove('active');
+}
+
+function handleLocationUpdateSubmit(e) {
+  e.preventDefault();
+  const code = document.getElementById('update-item-id').value;
+  const branch = document.getElementById('update-branch-select').value;
+  const location = document.getElementById('update-location-detail').value;
+  const status = document.getElementById('update-status-select').value;
+  const staff = document.getElementById('update-staff-name').value;
+  const notes = document.getElementById('update-notes').value;
+
+  const product = appState.products.find(p => p.code === code);
+  if (!product) return;
+
+  const nowStr = new Date().toLocaleString('sv-SE');
+
+  product.branch = branch;
+  product.location = location;
+  product.status = status;
+  product.updatedBy = staff;
+  product.updatedAt = nowStr;
+  product.notes = notes;
+
+  const newLog = {
+    id: 'LOG-' + Math.floor(100000 + Math.random() * 900000),
+    timestamp: nowStr,
+    code: product.code,
+    name: product.name,
+    action: 'UPDATE_LOCATION',
+    branch: branch,
+    branchName: getBranchName(branch),
+    location: location,
+    status: status,
+    staff: staff,
+    notes: notes
+  };
+
+  appState.logs.unshift(newLog);
+  saveState();
+  closeUpdateModal();
+  renderCurrentTab();
+
+  showToast(`บันทึกตำแหน่งของ [${product.name}] เรียบร้อยแล้ว`, 'success');
+
+  if (appState.gasUrl) {
+    syncUpdateToGas(product, newLog);
+  }
+}
+
+// 2. INVENTORY TAB LOGIC
+function renderInventoryTable() {
+  const tbody = document.getElementById('inventory-tbody');
+  if (!tbody) return;
+
+  const searchVal = (document.getElementById('inv-search-input')?.value || '').toLowerCase();
+  const branchFilter = document.getElementById('inv-branch-filter')?.value || '';
+  const statusFilter = document.getElementById('inv-status-filter')?.value || '';
+
+  const filtered = appState.products.filter(p => {
+    const matchSearch = p.name.toLowerCase().includes(searchVal) || p.code.toLowerCase().includes(searchVal) || (p.spec && p.spec.toLowerCase().includes(searchVal));
+    const matchBranch = branchFilter === '' || p.branch === branchFilter;
+    const matchStatus = statusFilter === '' || p.status === statusFilter;
+    return matchSearch && matchBranch && matchStatus;
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">ไม่พบข้อมูลรายการสินค้า</td></tr>`;
+    return;
+  }
+
+  const isAdmin = appState.currentUser && appState.currentUser.role === 'admin';
+
+  tbody.innerHTML = filtered.map(p => `
+    <tr>
+      <td>
+        <div class="product-cell">
+          <img src="${p.img || 'https://via.placeholder.com/80'}" class="product-img-thumb" alt="${p.name}">
+          <div class="product-meta">
+            <div class="item-title">${p.name}</div>
+            <div class="item-code">${p.code}</div>
+          </div>
+        </div>
+      </td>
+      <td>
+        <div style="font-weight: 500; color: var(--text-main);">${p.category}</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">${p.spec || '-'}</div>
+      </td>
+      <td><strong>${getBranchName(p.branch)}</strong></td>
+      <td>${p.location || '-'}</td>
+      <td>${getStatusBadge(p.status)}</td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="openQrPrintModal('${p.code}')">
+          <i class="fa-solid fa-qrcode"></i> พิมพ์ป้าย QR
+        </button>
+      </td>
+      <td style="text-align: right;">
+        <div style="display: inline-flex; gap: 0.375rem;">
+          <button class="btn btn-primary btn-sm" onclick="openUpdateModalForCode('${p.code}')">
+            <i class="fa-solid fa-location-dot"></i> ย้ายจุด
+          </button>
+          ${isAdmin ? `
+            <button class="btn btn-outline btn-sm" style="color: #ef4444; border-color: #fca5a5;" onclick="deleteProduct('${p.code}')">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          ` : ''}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+// Add Product Modal (Admin)
+function openAddProductModal(defaultCode = '') {
+  document.getElementById('add-code').value = defaultCode || ('WD-SMP-' + String(appState.products.length + 1).padStart(3, '0'));
+  document.getElementById('add-name').value = '';
+  document.getElementById('add-spec').value = '';
+  document.getElementById('add-img').value = '';
+  document.getElementById('add-product-modal').classList.add('active');
+}
+
+function closeAddProductModal() {
+  document.getElementById('add-product-modal').classList.remove('active');
+}
+
+function handleAddProductSubmit(e) {
+  e.preventDefault();
+  const code = document.getElementById('add-code').value.trim();
+  const name = document.getElementById('add-name').value.trim();
+  const category = document.getElementById('add-category').value;
+  const spec = document.getElementById('add-spec').value;
+  const img = document.getElementById('add-img').value || 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80';
+  const branch = document.getElementById('add-branch').value;
+  const location = document.getElementById('add-location').value;
+
+  if (appState.products.some(p => p.code === code)) {
+    showToast(`รหัสสินค้า ${code} มีอยู่ในระบบแล้ว`, 'error');
+    return;
+  }
+
+  const nowStr = new Date().toLocaleString('sv-SE');
+
+  const newProd = {
+    code, name, category, spec, img, branch, location,
+    status: 'On Display',
+    updatedBy: appState.currentUser ? appState.currentUser.name : 'Admin',
+    updatedAt: nowStr,
+    notes: 'สร้างสินค้าตัวอย่างรายการใหม่'
+  };
+
+  appState.products.push(newProd);
+  saveState();
+  closeAddProductModal();
+  renderCurrentTab();
+  showToast(`เพิ่มสินค้าตัวอย่างใหม่ [${name}] สำเร็จ`, 'success');
+
+  if (appState.gasUrl) {
+    syncProductToGas(newProd);
+  }
+}
+
+function deleteProduct(code) {
+  if (confirm(`คุณต้องการลบรายการตัวอย่างสินค้า ${code} ใช่หรือไม่?`)) {
+    appState.products = appState.products.filter(p => p.code !== code);
+    saveState();
+    renderCurrentTab();
+    showToast(`ลบรายการ ${code} แล้ว`, 'success');
+  }
+}
+
+// 3. DASHBOARD TAB LOGIC
+function renderDashboard() {
+  const total = appState.products.length;
+  const display = appState.products.filter(p => p.status === 'On Display').length;
+  const storage = appState.products.filter(p => p.status === 'In Storage').length;
+  const transit = appState.products.filter(p => p.status === 'In Transit').length;
+  const damaged = appState.products.filter(p => p.status === 'Damaged').length;
+
+  document.getElementById('stat-total-items').innerText = total;
+  document.getElementById('stat-display-items').innerText = display;
+  document.getElementById('stat-storage-items').innerText = storage;
+  document.getElementById('stat-transit-items').innerText = transit;
+  document.getElementById('stat-damaged-items').innerText = damaged;
+
+  const tbody = document.getElementById('branch-summary-tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = appState.branches.map(b => {
+    const bItems = appState.products.filter(p => p.branch === b.id);
+    const bDisplay = bItems.filter(p => p.status === 'On Display').length;
+    const bStorage = bItems.filter(p => p.status === 'In Storage').length;
+    const bTransit = bItems.filter(p => p.status === 'In Transit').length;
+    const bDamaged = bItems.filter(p => p.status === 'Damaged').length;
+
+    return `
+      <tr>
+        <td><code>${b.id}</code></td>
+        <td><strong>${b.name}</strong></td>
+        <td><span class="badge badge-display">${bDisplay}</span></td>
+        <td><span class="badge badge-storage">${bStorage}</span></td>
+        <td><span class="badge badge-transit">${bTransit}</span></td>
+        <td><span class="badge badge-damaged">${bDamaged}</span></td>
+        <td><strong>${bItems.length} ชิ้น</strong></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// 4. MOVEMENT LOGS TAB LOGIC
+function renderLogsTable() {
+  const tbody = document.getElementById('logs-tbody');
+  if (!tbody) return;
+
+  const searchVal = (document.getElementById('log-search-input')?.value || '').toLowerCase();
+
+  const filtered = appState.logs.filter(l => 
+    l.name.toLowerCase().includes(searchVal) || 
+    l.code.toLowerCase().includes(searchVal) || 
+    (l.staff && l.staff.toLowerCase().includes(searchVal)) || 
+    (l.branchName && l.branchName.toLowerCase().includes(searchVal))
+  );
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">ยังไม่มีประวัติการบันทึก</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(l => `
+    <tr>
+      <td style="font-size: 0.8125rem; color: var(--text-muted); white-space: nowrap;">${l.timestamp}</td>
+      <td>
+        <div style="font-weight: 600;">${l.name}</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">${l.code}</div>
+      </td>
+      <td><span style="font-size: 0.75rem; background: var(--bg-subtle); padding: 2px 6px; border-radius: 4px;">${l.action}</span></td>
+      <td><strong>${l.branchName || getBranchName(l.branch)}</strong></td>
+      <td>${l.location}</td>
+      <td>${getStatusBadge(l.status)}</td>
+      <td><i class="fa-solid fa-user" style="font-size: 0.75rem; color: var(--text-muted);"></i> ${l.staff}</td>
+    </tr>
+  `).join('');
+}
+
+function exportLogsCSV() {
+  let csv = "Timestamp,ItemCode,ItemName,Action,Branch,Location,Status,Staff\n";
+  appState.logs.forEach(l => {
+    csv += `"${l.timestamp}","${l.code}","${l.name}","${l.action}","${l.branchName}","${l.location}","${l.status}","${l.staff}"\n`;
+  });
+
+  const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Wood_Exc_Logs_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  showToast('ส่งออกไฟล์ CSV เรียบร้อยแล้ว', 'success');
+}
+
+// 5. USER MANAGEMENT LOGIC (ADMIN ONLY)
+function renderUsersTable() {
+  const tbody = document.getElementById('users-tbody');
+  if (!tbody) return;
+
+  tbody.innerHTML = appState.users.map(u => `
+    <tr>
+      <td><code>${u.username}</code></td>
+      <td><strong>${u.name}</strong></td>
+      <td>
+        <span class="badge ${u.role === 'admin' ? 'badge-transit' : 'badge-storage'}">
+          ${u.role === 'admin' ? '👑 Admin (ผู้ดูแลระบบ)' : '👤 Staff (พนักงาน)'}
+        </span>
+      </td>
+      <td>${getBranchName(u.branch)}</td>
+      <td><code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px;">${u.password}</code></td>
+      <td style="text-align: right;">
+        <div style="display: inline-flex; gap: 0.375rem;">
+          <button class="btn btn-secondary btn-sm" onclick="promptResetPassword('${u.username}')">
+            <i class="fa-solid fa-key"></i> เปลี่ยนรหัส
+          </button>
+          ${u.username !== 'admin' ? `
+            <button class="btn btn-outline btn-sm" style="color: #ef4444; border-color: #fca5a5;" onclick="deleteUser('${u.username}')">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          ` : ''}
+        </div>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openAddUserModal() {
+  document.getElementById('user-username').value = '';
+  document.getElementById('user-password').value = '';
+  document.getElementById('user-fullname').value = '';
+  document.getElementById('add-user-modal').classList.add('active');
+}
+
+function closeAddUserModal() {
+  document.getElementById('add-user-modal').classList.remove('active');
+}
+
+function handleAddUserSubmit(e) {
+  e.preventDefault();
+  const username = document.getElementById('user-username').value.trim();
+  const password = document.getElementById('user-password').value.trim();
+  const name = document.getElementById('user-fullname').value.trim();
+  const role = document.getElementById('user-role').value;
+  const branch = document.getElementById('user-branch').value;
+
+  if (appState.users.some(u => u.username.toLowerCase() === username.toLowerCase())) {
+    showToast(`Username [${username}] มีอยู่ในระบบแล้ว`, 'error');
+    return;
+  }
+
+  const nowStr = new Date().toLocaleString('sv-SE');
+  const newUser = {
+    userId: 'U' + String(appState.users.length + 1).padStart(3, '0'),
+    username, password, name, role, branch,
+    createdAt: nowStr
+  };
+
+  appState.users.push(newUser);
+  saveState();
+  closeAddUserModal();
+  renderUsersTable();
+  showToast(`เพิ่มผู้ใช้งานใหม่ [${name}] เรียบร้อยแล้ว`, 'success');
+
+  if (appState.gasUrl) {
+    syncUserToGas(newUser);
+  }
+}
+
+function promptResetPassword(username) {
+  const u = appState.users.find(x => x.username === username);
+  if (!u) return;
+
+  const newPass = prompt(`กรอกรหัสผ่านใหม่สำหรับ ${u.name} (${username}):`, u.password);
+  if (newPass && newPass.trim() !== '') {
+    u.password = newPass.trim();
+    saveState();
+    renderUsersTable();
+    showToast(`เปลี่ยนรหัสผ่านสำหรับ ${username} เรียบร้อยแล้ว`, 'success');
+  }
+}
+
+function deleteUser(username) {
+  if (username === 'admin') {
+    showToast('ไม่สามารถลบบัญชี Admin หลักได้', 'error');
+    return;
+  }
+  if (confirm(`คุณต้องการลบบัญชีผู้ใช้ ${username} ใช่หรือไม่?`)) {
+    appState.users = appState.users.filter(u => u.username !== username);
+    saveState();
+    renderUsersTable();
+    showToast(`ลบบัญชี ${username} แล้ว`, 'success');
+  }
+}
+
+// 6. QR CODE PRINT MODAL LOGIC
+function openQrPrintModal(itemCode) {
+  const p = appState.products.find(x => x.code === itemCode);
+  if (!p) return;
+
+  document.getElementById('print-item-name').innerText = p.name;
+  document.getElementById('print-item-code').innerText = p.code;
+
+  const canvasBox = document.getElementById('qr-canvas-box');
+  canvasBox.innerHTML = '';
+
+  new QRCode(canvasBox, {
+    text: p.code,
+    width: 160,
+    height: 160,
+    colorDark : "#0f172a",
+    colorLight : "#ffffff",
+    correctLevel : QRCode.CorrectLevel.H
+  });
+
+  document.getElementById('qr-print-modal').classList.add('active');
+}
+
+function closeQrPrintModal() {
+  document.getElementById('qr-print-modal').classList.remove('active');
+}
+
+function printQrCard() {
+  window.print();
+}
+
+// 7. GOOGLE SHEETS API INTEGRATION
+function saveGasUrl() {
+  const url = document.getElementById('gas-url-input').value.trim();
+  appState.gasUrl = url;
+  saveState();
+  updateConnStatusUI();
+  showToast('บันทึก Web App URL เรียบร้อยแล้ว', 'success');
+}
+
+function updateConnStatusUI() {
+  const dot = document.getElementById('conn-dot');
+  const text = document.getElementById('conn-text');
+
+  if (appState.gasUrl) {
+    dot.className = 'config-status-dot connected';
+    text.innerText = 'Connected Google Sheets';
+  } else {
+    dot.className = 'config-status-dot';
+    text.innerText = 'Demo Mode (Offline)';
+  }
+}
+
+async function testGasConnection() {
+  if (!appState.gasUrl) {
+    showToast('โปรดกรอก Google Apps Script Web App URL ก่อนกดทดสอบ', 'error');
+    return;
+  }
+
+  showToast('กำลังเชื่อมต่อ Google Sheets...', 'info');
+
+  try {
+    const res = await fetch(`${appState.gasUrl}?action=getProducts`);
+    const data = await res.json();
+    if (data && data.status === 'success') {
+      showToast('เชื่อมต่อสำเร็จ! ดึงข้อมูลจาก Google Sheets ได้เรียบร้อย', 'success');
+      if (data.products && data.products.length > 0) {
+        appState.products = data.products;
+        saveState();
+        renderCurrentTab();
+      }
+    } else {
+      showToast('การเชื่อมต่อตอบกลับ แต่รูปแบบข้อมูลไม่ถูกต้อง', 'error');
+    }
+  } catch (err) {
+    console.error(err);
+    showToast('ไม่สามารถเชื่อมต่อ Web App URL ได้ (โปรดเช็คสิทธิ์ Anyone หรือ CORS)', 'error');
+  }
+}
+
+async function syncUpdateToGas(product, log) {
+  if (!appState.gasUrl) return;
+
+  try {
+    await fetch(appState.gasUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'updateLocation',
+        product: product,
+        log: log
+      })
+    });
+  } catch (err) {
+    console.warn('Failed sync to Google Sheets:', err);
+  }
+}
+
+async function syncProductToGas(newProduct) {
+  if (!appState.gasUrl) return;
+
+  try {
+    await fetch(appState.gasUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'addProduct',
+        product: newProduct
+      })
+    });
+  } catch (err) {
+    console.warn('Failed sync new product to Google Sheets:', err);
+  }
+}
+
+async function syncUserToGas(newUser) {
+  if (!appState.gasUrl) return;
+
+  try {
+    await fetch(appState.gasUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'addUser',
+        user: newUser
+      })
+    });
+  } catch (err) {
+    console.warn('Failed sync user to Google Sheets:', err);
+  }
+}
+
+function downloadGasScriptCode() {
+  const gasCode = `// Google Apps Script (Code.gs) Code for Sample Tracker App with User Auth
+function doGet(e) {
+  const action = e.parameter.action;
+  if (action === 'getProducts') return respondJson(getAllProductsWithLocation());
+  if (action === 'getUsers') return respondJson(getAllUsers());
+  return respondJson({status: 'online', msg: 'Wood Exc API Ready'});
+}
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    if (data.action === 'updateLocation') updateLocationAndLog(data.product, data.log);
+    else if (data.action === 'addProduct') createNewProduct(data.product);
+    else if (data.action === 'addUser') createNewUser(data.user);
+    return respondJson({status: 'success'});
+  } catch(err) {
+    return respondJson({status: 'error', error: err.toString()});
+  }
+}`;
+  navigator.clipboard.writeText(gasCode);
+  showToast('คัดลอกโค้ด Google Apps Script ไปยัง Clipboard แล้ว!', 'success');
+}
+
+// Toast Notifications Helper
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  
+  const iconMap = {
+    success: 'fa-circle-check',
+    error: 'fa-circle-exclamation',
+    info: 'fa-circle-info'
+  };
+
+  toast.innerHTML = `<i class="fa-solid ${iconMap[type] || 'fa-bell'}"></i> <span>${message}</span>`;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(100%)';
+    toast.style.transition = 'all 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, 3500);
+}
