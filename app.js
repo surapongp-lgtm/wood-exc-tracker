@@ -1,6 +1,10 @@
 /* Wood Exc Sample Tracker - Core Application Logic with Branch Creation */
 
-// Default Mock Data
+// Global Google Apps Script Web App URL
+// กำหนด Web App URL หลักที่นี่เพื่อให้ทุกอุปกรณ์ (รวมถึงมือถือเครื่องใหม่) เชื่อมต่อ Google Sheets โดยอัตโนมัติ
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbx0YW6C3Zo9VYCXMlYGVmdheyGDhpp7X_pZEquzJ0f0kuCq--QsE71VYNiCHA3B6kSgtg/exec';
+
+// Default Fallback Data (ใช้เมื่อยังไม่ได้เชื่อมต่อ Google Sheets API)
 const DEFAULT_BRANCHES = [
   { id: 'BR-01', name: 'สาขาบางนา (Showroom Bangna)', address: 'ถนนบางนา-ตราด กม. 4' },
   { id: 'BR-02', name: 'สาขารามอินทรา (Ramindra)', address: 'ถนนรามอินทรา กม. 8' },
@@ -146,6 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   updateConnStatusUI();
 
+  if (appState.gasUrl) {
+    fetchInitialDataFromGas();
+  }
+
   const urlParams = new URLSearchParams(window.location.search);
   const scanParam = urlParams.get('scan');
   if (scanParam) {
@@ -169,7 +177,7 @@ function loadState() {
   appState.logs = savedLogs ? JSON.parse(savedLogs) : DEFAULT_LOGS;
   appState.users = savedUsers ? JSON.parse(savedUsers) : DEFAULT_USERS;
   appState.currentUser = savedCurrentUser ? JSON.parse(savedCurrentUser) : null;
-  appState.gasUrl = savedGasUrl || '';
+  appState.gasUrl = savedGasUrl || DEFAULT_GAS_URL;
 
   if (document.getElementById('gas-url-input')) {
     document.getElementById('gas-url-input').value = appState.gasUrl;
@@ -959,7 +967,63 @@ function updateConnStatusUI() {
     text.innerText = 'Connected Google Sheets';
   } else {
     dot.className = 'config-status-dot';
-    text.innerText = 'Demo Mode (Offline)';
+    text.innerText = 'ยังไม่ได้เชื่อมต่อ Google Sheets API';
+  }
+}
+
+async function fetchInitialDataFromGas() {
+  if (!appState.gasUrl) return;
+
+  let hasUpdates = false;
+
+  try {
+    const res = await fetch(`${appState.gasUrl}?action=getProducts`);
+    const data = await res.json();
+    if (data && data.status === 'success' && Array.isArray(data.products) && data.products.length > 0) {
+      appState.products = data.products;
+      hasUpdates = true;
+    }
+  } catch (err) {
+    console.warn('Auto fetch products failed:', err);
+  }
+
+  try {
+    const res = await fetch(`${appState.gasUrl}?action=getBranches`);
+    const data = await res.json();
+    if (data && data.status === 'success' && Array.isArray(data.branches) && data.branches.length > 0) {
+      appState.branches = data.branches;
+      hasUpdates = true;
+    }
+  } catch (err) {
+    console.warn('Auto fetch branches failed:', err);
+  }
+
+  try {
+    const res = await fetch(`${appState.gasUrl}?action=getUsers`);
+    const data = await res.json();
+    if (data && data.status === 'success' && Array.isArray(data.users) && data.users.length > 0) {
+      appState.users = data.users;
+      hasUpdates = true;
+    }
+  } catch (err) {
+    console.warn('Auto fetch users failed:', err);
+  }
+
+  try {
+    const res = await fetch(`${appState.gasUrl}?action=getLogs`);
+    const data = await res.json();
+    if (data && data.status === 'success' && Array.isArray(data.logs) && data.logs.length > 0) {
+      appState.logs = data.logs;
+      hasUpdates = true;
+    }
+  } catch (err) {
+    console.warn('Auto fetch logs failed:', err);
+  }
+
+  if (hasUpdates) {
+    saveState();
+    initDropdowns();
+    renderCurrentTab();
   }
 }
 
