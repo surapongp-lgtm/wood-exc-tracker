@@ -311,7 +311,60 @@ function closeAddBranchModal() {
   document.getElementById('add-branch-modal').classList.remove('active');
 }
 
-function handleAddBranchSubmit(e) {
+function parseCoordinatesFromUrl(url) {
+  if (!url) return null;
+  
+  // 1. Google Maps !3dlat!4dlng (Exact Google Place Marker coordinates format)
+  const dMatch = url.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+  if (dMatch) {
+    return { lat: parseFloat(dMatch[1]), lng: parseFloat(dMatch[2]) };
+  }
+
+  // 2. @lat,lng format
+  const atMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (atMatch) {
+    return { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
+  }
+
+  // 3. q=lat,lng or ll=lat,lng format
+  const qMatch = url.match(/[?&](?:q|ll|center)=(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (qMatch) {
+    return { lat: parseFloat(qMatch[1]), lng: parseFloat(qMatch[2]) };
+  }
+
+  // 4. Raw comma separated lat, lng
+  const rawMatch = url.match(/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/);
+  if (rawMatch) {
+    return { lat: parseFloat(rawMatch[1]), lng: parseFloat(rawMatch[2]) };
+  }
+
+  return null;
+}
+
+async function geocodeBranchLocation(bName, bAddress) {
+  const query = `${bName} ${bAddress}`.replace(/สาขา|คลัง|หลัก|โชว์รูม|\(.*?\)/g, ' ').trim();
+  const searchTerms = [
+    `${query} Thailand`,
+    `${bName} Thailand`,
+    `${bAddress} Thailand`
+  ];
+
+  for (const term of searchTerms) {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(term)}`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'th,en' } });
+      const data = await res.json();
+      if (data && data.length > 0 && data[0].lat && data[0].lon) {
+        return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+      }
+    } catch (err) {
+      console.warn('Geocoding error:', err);
+    }
+  }
+  return null;
+}
+
+async function handleAddBranchSubmit(e) {
   e.preventDefault();
   const bName = document.getElementById('new-branch-name').value.trim();
   const bId = document.getElementById('new-branch-id').value.trim();
@@ -325,23 +378,26 @@ function handleAddBranchSubmit(e) {
     return;
   }
 
-  // Parse lat, lng coordinates from Google Maps URL if present
-  let lat = null;
-  let lng = null;
+  let parsed = parseCoordinatesFromUrl(bMap);
+  let lat = parsed ? parsed.lat : null;
+  let lng = parsed ? parsed.lng : null;
 
-  if (bMap) {
-    const atMatch = bMap.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-    const qMatch = bMap.match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/);
-    if (atMatch) {
-      lat = parseFloat(atMatch[1]);
-      lng = parseFloat(atMatch[2]);
-    } else if (qMatch) {
-      lat = parseFloat(qMatch[1]);
-      lng = parseFloat(qMatch[2]);
+  // Specific check for known short links like Navanakorn
+  if (bMap.includes('AMmZtWbAc9dJ3dcJ9') || bName.includes('นวนคร')) {
+    lat = 14.1251692;
+    lng = 100.5958271;
+  }
+
+  if (!lat || !lng) {
+    showToast('กำลังค้นหาพิกัดตำแหน่งบนแผนที่...', 'info');
+    const geo = await geocodeBranchLocation(bName, bAddress);
+    if (geo) {
+      lat = geo.lat;
+      lng = geo.lng;
     }
   }
 
-  // Fallback lat/lng coordinates around Thailand if not specified
+  // Fallback lat/lng coordinates if still null
   if (!lat || !lng) {
     if (bName.includes('บางนา')) { lat = 13.6682; lng = 100.6343; }
     else if (bName.includes('รามอินทรา')) { lat = 13.8471; lng = 100.6554; }
@@ -981,7 +1037,18 @@ function renderBranchMap() {
     let lng = b.lng;
 
     if (!lat || !lng) {
-      if (b.name.includes('บางนา')) { lat = 13.6682; lng = 100.6343; }
+      if (b.mapLink) {
+        const parsed = parseCoordinatesFromUrl(b.mapLink);
+        if (parsed) {
+          lat = parsed.lat;
+          lng = parsed.lng;
+        }
+      }
+    }
+
+    if (!lat || !lng) {
+      if (b.name.includes('นวนคร') || (b.mapLink && b.mapLink.includes('AMmZtWbAc9dJ3dcJ9'))) { lat = 14.1251692; lng = 100.5958271; }
+      else if (b.name.includes('บางนา')) { lat = 13.6682; lng = 100.6343; }
       else if (b.name.includes('รามอินทรา')) { lat = 13.8471; lng = 100.6554; }
       else if (b.name.includes('ภูเก็ต')) { lat = 7.8804; lng = 98.3923; }
       else if (b.name.includes('เชียงใหม่')) { lat = 18.7883; lng = 98.9853; }
@@ -1315,6 +1382,7 @@ async function testGasConnection() {
         saveState();
         renderCurrentTab();
       }
+      syncAllBranchesToGas();
     } else {
       showToast('การเชื่อมต่อตอบกลับ แต่รูปแบบข้อมูลไม่ถูกต้อง', 'error');
     }
@@ -1412,6 +1480,13 @@ async function syncBranchToGas(newBranch) {
     });
   } catch (err) {
     console.warn('Failed sync branch to Google Sheets:', err);
+  }
+}
+
+async function syncAllBranchesToGas() {
+  if (!appState.gasUrl) return;
+  for (const b of appState.branches) {
+    await syncBranchToGas(b);
   }
 }
 

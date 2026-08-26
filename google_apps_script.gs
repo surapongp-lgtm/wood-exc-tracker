@@ -36,6 +36,12 @@ function setupDatabaseSheets() {
     bSheet.appendRow(["BR-02", "สาขารามอินทรา (Ramindra)", "คุณวิชัย", "02-222-2222", "ถนนรามอินทรา กม. 8", "https://maps.google.com/?q=13.847,100.655"]);
     bSheet.appendRow(["BR-03", "สาขาภูเก็ต (Phuket Branch)", "คุณอนันต์", "076-333-333", "อ.เมือง จ.ภูเก็ต", "https://maps.google.com/?q=7.880,98.392"]);
     bSheet.appendRow(["BR-04", "คลังสินค้าหลัก (Central Warehouse)", "คุณสมชาย", "02-444-4444", "กิ่งแก้ว สมุทรปราการ", "https://maps.google.com/?q=13.606,100.742"]);
+  } else {
+    // Auto upgrade header row 1 to include map_link column 6 if missing
+    const headerRow = bSheet.getRange(1, 1, 1, 6).getValues()[0];
+    if (!headerRow[5] || headerRow[5] === '') {
+      bSheet.getRange(1, 6).setValue("map_link").setFontWeight("bold").setBackground("#f1f5f9");
+    }
   }
 
   // 3. Sheet Current_Placement
@@ -358,14 +364,42 @@ function getAllBranches() {
 function createNewBranch(branch) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const bSheet = ss.getSheetByName(SHEET_BRANCHES);
-  bSheet.appendRow([
-    branch.id,
-    branch.name,
-    '-',
-    '-',
-    branch.address || '',
-    branch.mapLink || ''
-  ]);
+
+  // Auto ensure column 6 has map_link header
+  const headerRow = bSheet.getRange(1, 1, 1, 6).getValues()[0];
+  if (!headerRow[5] || headerRow[5] === '') {
+    bSheet.getRange(1, 6).setValue("map_link").setFontWeight("bold").setBackground("#f1f5f9");
+  }
+
+  const data = bSheet.getDataRange().getValues();
+  let foundRow = -1;
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === branch.id || (branch.name && data[i][1] === branch.name)) {
+      foundRow = i + 1;
+      break;
+    }
+  }
+
+  if (foundRow > -1) {
+    bSheet.getRange(foundRow, 1, 1, 6).setValues([[
+      branch.id,
+      branch.name,
+      '-',
+      '-',
+      branch.address || '',
+      branch.mapLink || ''
+    ]]);
+  } else {
+    bSheet.appendRow([
+      branch.id,
+      branch.name,
+      '-',
+      '-',
+      branch.address || '',
+      branch.mapLink || ''
+    ]);
+  }
 }
 
 function updateUserPassword(username, newPassword) {
