@@ -277,14 +277,21 @@ function handleHeaderConnClick() {
   }
 }
 
-// Dropdown Populators
+// Dropdown Populators & Branch Sorting Helper
+function getSortedBranches() {
+  return [...appState.branches].sort((a, b) => 
+    a.name.localeCompare(b.name, 'th', { sensitivity: 'base', numeric: true })
+  );
+}
+
 function initDropdowns() {
   const invBranchFilter = document.getElementById('inv-branch-filter');
   const updateBranchSelect = document.getElementById('update-branch-select');
   const addBranch = document.getElementById('add-branch');
   const userBranch = document.getElementById('user-branch');
 
-  let branchOptionsHtml = appState.branches.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+  const sortedBranches = getSortedBranches();
+  let branchOptionsHtml = sortedBranches.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
   
   if (invBranchFilter) invBranchFilter.innerHTML = '<option value="">ทุกสาขา</option>' + branchOptionsHtml;
   if (updateBranchSelect) updateBranchSelect.innerHTML = branchOptionsHtml;
@@ -906,7 +913,8 @@ function openEditProductModal(code) {
 
   const editBranchSelect = document.getElementById('edit-branch');
   if (editBranchSelect) {
-    editBranchSelect.innerHTML = appState.branches.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+    const sortedBranches = getSortedBranches();
+    editBranchSelect.innerHTML = sortedBranches.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
     editBranchSelect.value = p.branch;
   }
 
