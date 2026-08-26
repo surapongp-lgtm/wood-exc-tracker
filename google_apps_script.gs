@@ -30,12 +30,12 @@ function setupDatabaseSheets() {
   // 2. Sheet Branches
   let bSheet = ss.getSheetByName(SHEET_BRANCHES) || ss.insertSheet(SHEET_BRANCHES);
   if (bSheet.getLastRow() === 0) {
-    bSheet.appendRow(["branch_id", "branch_name", "contact_person", "phone", "address"]);
-    bSheet.getRange(1, 1, 1, 5).setFontWeight("bold").setBackground("#f1f5f9");
-    bSheet.appendRow(["BR-01", "สาขาบางนา (Showroom Bangna)", "คุณสมหญิง", "02-111-1111", "ถนนบางนา-ตราด กม. 4"]);
-    bSheet.appendRow(["BR-02", "สาขารามอินทรา (Ramindra)", "คุณวิชัย", "02-222-2222", "ถนนรามอินทรา กม. 8"]);
-    bSheet.appendRow(["BR-03", "สาขาภูเก็ต (Phuket Branch)", "คุณอนันต์", "076-333-333", "อ.เมือง จ.ภูเก็ต"]);
-    bSheet.appendRow(["BR-04", "คลังสินค้าหลัก (Central Warehouse)", "คุณสมชาย", "02-444-4444", "กิ่งแก้ว สมุทรปราการ"]);
+    bSheet.appendRow(["branch_id", "branch_name", "contact_person", "phone", "address", "map_link"]);
+    bSheet.getRange(1, 1, 1, 6).setFontWeight("bold").setBackground("#f1f5f9");
+    bSheet.appendRow(["BR-01", "สาขาบางนา (Showroom Bangna)", "คุณสมหญิง", "02-111-1111", "ถนนบางนา-ตราด กม. 4", "https://maps.app.goo.gl/pgGLhCyUzDWaEo9r9"]);
+    bSheet.appendRow(["BR-02", "สาขารามอินทรา (Ramindra)", "คุณวิชัย", "02-222-2222", "ถนนรามอินทรา กม. 8", "https://maps.google.com/?q=13.847,100.655"]);
+    bSheet.appendRow(["BR-03", "สาขาภูเก็ต (Phuket Branch)", "คุณอนันต์", "076-333-333", "อ.เมือง จ.ภูเก็ต", "https://maps.google.com/?q=7.880,98.392"]);
+    bSheet.appendRow(["BR-04", "คลังสินค้าหลัก (Central Warehouse)", "คุณสมชาย", "02-444-4444", "กิ่งแก้ว สมุทรปราการ", "https://maps.google.com/?q=13.606,100.742"]);
   }
 
   // 3. Sheet Current_Placement
@@ -103,6 +103,9 @@ function doPost(e) {
     } else if (action === 'addProduct') {
       createNewProduct(postData.product);
       return respondJson({ status: 'success', message: 'New product added' });
+    } else if (action === 'editProduct') {
+      updateProductDetails(postData.product);
+      return respondJson({ status: 'success', message: 'Product updated' });
     } else if (action === 'addUser') {
       createNewUser(postData.user);
       return respondJson({ status: 'success', message: 'New user added' });
@@ -258,6 +261,40 @@ function createNewProduct(product) {
   ]);
 }
 
+function updateProductDetails(product) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const pSheet = ss.getSheetByName(SHEET_PRODUCTS);
+  const placeSheet = ss.getSheetByName(SHEET_PLACEMENT);
+
+  const pData = pSheet.getDataRange().getValues();
+  for (let i = 1; i < pData.length; i++) {
+    if (pData[i][0] === product.code) {
+      pSheet.getRange(i + 1, 2, 1, 4).setValues([[
+        product.name,
+        product.category,
+        product.spec,
+        product.img
+      ]]);
+      break;
+    }
+  }
+
+  const placeData = placeSheet.getDataRange().getValues();
+  for (let j = 1; j < placeData.length; j++) {
+    if (placeData[j][0] === product.code) {
+      placeSheet.getRange(j + 1, 2, 1, 6).setValues([[
+        product.branch,
+        product.location,
+        product.status || 'On Display',
+        product.updatedBy || 'Admin',
+        new Date(),
+        product.notes || ''
+      ]]);
+      break;
+    }
+  }
+}
+
 function getAllUsers() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const uSheet = ss.getSheetByName(SHEET_USERS);
@@ -311,7 +348,8 @@ function getAllBranches() {
       name: row[1],
       contact: row[2],
       phone: row[3],
-      address: row[4]
+      address: row[4],
+      mapLink: row[5] || ''
     });
   }
   return branches;
@@ -325,7 +363,8 @@ function createNewBranch(branch) {
     branch.name,
     '-',
     '-',
-    branch.address || ''
+    branch.address || '',
+    branch.mapLink || ''
   ]);
 }
 

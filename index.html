@@ -20,6 +20,10 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <!-- QRCode Canvas Generator Library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <!-- Leaflet Interactive Map Library -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
@@ -211,6 +215,19 @@
         </div>
       </div>
 
+      <!-- Interactive Branch Map Card -->
+      <div class="card-container">
+        <div class="card-header">
+          <div class="card-title">
+            <i class="fa-solid fa-map-location-dot" style="color: #10b981;"></i> แผนที่พิกัดสาขา & คลังจัดเก็บทั้งหมด (Branch Map Overview)
+          </div>
+          <span style="font-size: 0.8125rem; color: var(--text-muted);">
+            <i class="fa-solid fa-circle-info"></i> แตะที่หมุดเพื่อดูข้อมูลสาขา หรือกดนำทาง Google Maps
+          </span>
+        </div>
+        <div id="branch-map-container" style="width: 100%; height: 380px; border-radius: var(--radius-md); border: 1px solid var(--border); z-index: 1;"></div>
+      </div>
+
       <!-- Branch Summary Table -->
       <div class="card-container">
         <div class="card-header">
@@ -232,6 +249,7 @@
               <tr>
                 <th>รหัสสาขา</th>
                 <th>ชื่อสาขา</th>
+                <th>พิกัด / แผนที่</th>
                 <th>จัดแสดง (Display)</th>
                 <th>ในคลัง (Storage)</th>
                 <th>กำลังย้าย (Transit)</th>
@@ -401,7 +419,7 @@
       </form>
 
       <!-- Quick Login Buttons -->
-   
+      
     </div>
   </div>
 
@@ -545,8 +563,28 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label">URL รูปภาพสินค้า</label>
-            <input type="url" id="add-img" class="form-control" placeholder="https://images.unsplash.com/...">
+            <label class="form-label">รูปภาพสินค้าตัวอย่าง</label>
+            <div class="image-uploader-box">
+              <div class="image-preview-container" id="add-img-preview-box">
+                <img id="add-img-preview" src="https://via.placeholder.com/300x200?text=No+Image" alt="Preview">
+              </div>
+              <div class="image-uploader-actions">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="triggerPhotoUpload('add')">
+                  <i class="fa-solid fa-camera"></i> ถ่ายภาพ / เลือกรูปภาพ
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" onclick="toggleUrlInput('add')">
+                  <i class="fa-solid fa-link"></i> ระบุ URL
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" style="color: #ef4444; border-color: #fca5a5;" onclick="clearPhoto('add')">
+                  <i class="fa-solid fa-trash"></i> ลบรูป
+                </button>
+              </div>
+              <input type="file" id="add-img-file" accept="image/*" capture="environment" style="display: none;" onchange="handleImageFileSelect(event, 'add')">
+              <input type="hidden" id="add-img" value="">
+              <div id="add-img-url-wrapper" style="display: none; margin-top: 0.5rem;">
+                <input type="url" id="add-img-url-input" class="form-control" placeholder="https://images.unsplash.com/..." oninput="handleUrlInput(this.value, 'add')">
+              </div>
+            </div>
           </div>
 
           <div class="form-group">
@@ -569,6 +607,111 @@
           <div class="modal-footer" style="padding-right: 0; padding-bottom: 0;">
             <button type="button" class="btn btn-secondary" onclick="closeAddProductModal()">ยกเลิก</button>
             <button type="submit" class="btn btn-primary">บันทึกสินค้าใหม่</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3.5. Edit Existing Product Modal (Admin Only) -->
+  <div class="modal-overlay" id="edit-product-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-pen-to-square" style="color: #b45309;"></i> แก้ไขข้อมูล & รูปภาพสินค้าตัวอย่าง
+        </div>
+        <button class="btn-close" onclick="closeEditProductModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="edit-product-form" onsubmit="handleEditProductSubmit(event)">
+          <input type="hidden" id="edit-code">
+
+          <div class="form-group">
+            <label class="form-label">รหัสสินค้าตัวอย่าง (Item Code)</label>
+            <input type="text" id="edit-code-display" class="form-control" readonly style="background: var(--bg-subtle); font-family: monospace;">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">ชื่อสินค้า / รุ่นตัวอย่างไม้ <span style="color:red;">*</span></label>
+            <input type="text" id="edit-name" class="form-control" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">หมวดหมู่ <span style="color:red;">*</span></label>
+            <select id="edit-category" class="form-control" required>
+              <option value="ไม้พื้น (Flooring)">ไม้พื้น (Flooring)</option>
+              <option value="ไม้ผนัง/ฝ้า (Cladding)">ไม้ผนัง/ฝ้า (Cladding)</option>
+              <option value="ไม้ระแนง (Louver)">ไม้ระแนง (Louver)</option>
+              <option value="ไม้สังเคราะห์ WPC">ไม้สังเคราะห์ WPC</option>
+              <option value="อื่นๆ">อื่นๆ</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">สเปก / รายละเอียดสี</label>
+            <input type="text" id="edit-spec" class="form-control">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">รูปภาพสินค้าตัวอย่าง</label>
+            <div class="image-uploader-box">
+              <div class="image-preview-container" id="edit-img-preview-box">
+                <img id="edit-img-preview" src="https://via.placeholder.com/300x200?text=No+Image" alt="Preview">
+              </div>
+              <div class="image-uploader-actions">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="triggerPhotoUpload('edit')">
+                  <i class="fa-solid fa-camera"></i> ถ่ายภาพ / เลือกรูปภาพ
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" onclick="toggleUrlInput('edit')">
+                  <i class="fa-solid fa-link"></i> ระบุ URL
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" style="color: #ef4444; border-color: #fca5a5;" onclick="clearPhoto('edit')">
+                  <i class="fa-solid fa-trash"></i> ลบรูป
+                </button>
+              </div>
+              <input type="file" id="edit-img-file" accept="image/*" capture="environment" style="display: none;" onchange="handleImageFileSelect(event, 'edit')">
+              <input type="hidden" id="edit-img" value="">
+              <div id="edit-img-url-wrapper" style="display: none; margin-top: 0.5rem;">
+                <input type="url" id="edit-img-url-input" class="form-control" placeholder="https://images.unsplash.com/..." oninput="handleUrlInput(this.value, 'edit')">
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.375rem;">
+              <label class="form-label" style="margin-bottom: 0;">สาขาที่จัดวาง <span style="color:red;">*</span></label>
+              <button type="button" class="btn btn-outline btn-sm" onclick="openAddBranchModal()" style="padding: 0.15rem 0.5rem; font-size: 0.75rem;">
+                <i class="fa-solid fa-plus"></i> เพิ่มสาขาใหม่
+              </button>
+            </div>
+            <select id="edit-branch" class="form-control" required></select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">รายละเอียดจุดจัดวางอย่างละเอียด</label>
+            <input type="text" id="edit-location" class="form-control">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">สถานะจัดวาง</label>
+            <select id="edit-status" class="form-control">
+              <option value="On Display">🟢 วางจัดแสดงอยู่ (On Display)</option>
+              <option value="In Storage">🔵 อยู่ในคลัง/สต็อกสาขา (In Storage)</option>
+              <option value="In Transit">🟡 กำลังขนย้ายย้ายสาขา (In Transit)</option>
+              <option value="Damaged">🔴 ชำรุด / ส่งคืนคลังหลัก (Damaged)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">หมายเหตุเพิ่มเติม</label>
+            <textarea id="edit-notes" class="form-control"></textarea>
+          </div>
+
+          <div class="modal-footer" style="padding-right: 0; padding-bottom: 0;">
+            <button type="button" class="btn btn-secondary" onclick="closeEditProductModal()">ยกเลิก</button>
+            <button type="submit" class="btn btn-primary">
+              <i class="fa-solid fa-floppy-disk"></i> บันทึกการแก้ไข
+            </button>
           </div>
         </form>
       </div>
@@ -599,6 +742,12 @@
           <div class="form-group">
             <label class="form-label">ที่อยู่ / รายละเอียดสถานที่เพิ่มเติม</label>
             <input type="text" id="new-branch-address" class="form-control" placeholder="เช่น อ.เมือง จ.เชียงใหม่">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Link ที่อยู่สาขา / พิกัด Google Maps</label>
+            <input type="url" id="new-branch-map" class="form-control" placeholder="เช่น https://maps.app.goo.gl/pgGLhCyUzDWaEo9r9">
+            <span style="font-size: 0.75rem; color: var(--text-muted);">วางลิงก์สถานที่จาก Google Maps เพื่อให้ปักหมุดบนแผนที่และนำทางได้</span>
           </div>
 
           <div class="modal-footer" style="padding-right: 0; padding-bottom: 0;">

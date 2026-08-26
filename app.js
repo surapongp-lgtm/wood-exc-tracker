@@ -6,10 +6,10 @@ const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbx0YW6C3Zo9VYCX
 
 // Default Fallback Data (ใช้เมื่อยังไม่ได้เชื่อมต่อ Google Sheets API)
 const DEFAULT_BRANCHES = [
-  { id: 'BR-01', name: 'สาขาบางนา (Showroom Bangna)', address: 'ถนนบางนา-ตราด กม. 4' },
-  { id: 'BR-02', name: 'สาขารามอินทรา (Ramindra)', address: 'ถนนรามอินทรา กม. 8' },
-  { id: 'BR-03', name: 'สาขาภูเก็ต (Phuket Branch)', address: 'อ.เมือง จ.ภูเก็ต' },
-  { id: 'BR-04', name: 'คลังสินค้าหลัก (Central Warehouse)', address: 'กิ่งแก้ว สมุทรปราการ' }
+  { id: 'BR-01', name: 'สาขาบางนา (Showroom Bangna)', address: 'ถนนบางนา-ตราด กม. 4', mapLink: 'https://maps.app.goo.gl/pgGLhCyUzDWaEo9r9', lat: 13.6682, lng: 100.6343 },
+  { id: 'BR-02', name: 'สาขารามอินทรา (Ramindra)', address: 'ถนนรามอินทรา กม. 8', mapLink: 'https://maps.google.com/?q=13.847,100.655', lat: 13.8471, lng: 100.6554 },
+  { id: 'BR-03', name: 'สาขาภูเก็ต (Phuket Branch)', address: 'อ.เมือง จ.ภูเก็ต', mapLink: 'https://maps.google.com/?q=7.880,98.392', lat: 7.8804, lng: 98.3923 },
+  { id: 'BR-04', name: 'คลังสินค้าหลัก (Central Warehouse)', address: 'กิ่งแก้ว สมุทรปราการ', mapLink: 'https://maps.google.com/?q=13.606,100.742', lat: 13.6062, lng: 100.7425 }
 ];
 
 const DEFAULT_USERS = [
@@ -132,7 +132,8 @@ let appState = {
   users: [],
   currentUser: null,
   gasUrl: '',
-  html5QrScanner: null
+  html5QrScanner: null,
+  leafMap: null
 };
 
 // Initialization on DOM Load
@@ -302,6 +303,7 @@ function openAddBranchModal() {
   document.getElementById('new-branch-name').value = '';
   document.getElementById('new-branch-id').value = newId;
   document.getElementById('new-branch-address').value = '';
+  if (document.getElementById('new-branch-map')) document.getElementById('new-branch-map').value = '';
   document.getElementById('add-branch-modal').classList.add('active');
 }
 
@@ -314,6 +316,7 @@ function handleAddBranchSubmit(e) {
   const bName = document.getElementById('new-branch-name').value.trim();
   const bId = document.getElementById('new-branch-id').value.trim();
   const bAddress = document.getElementById('new-branch-address').value.trim();
+  const bMap = document.getElementById('new-branch-map')?.value.trim() || '';
 
   if (!bName) return;
 
@@ -322,10 +325,42 @@ function handleAddBranchSubmit(e) {
     return;
   }
 
+  // Parse lat, lng coordinates from Google Maps URL if present
+  let lat = null;
+  let lng = null;
+
+  if (bMap) {
+    const atMatch = bMap.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    const qMatch = bMap.match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+    if (atMatch) {
+      lat = parseFloat(atMatch[1]);
+      lng = parseFloat(atMatch[2]);
+    } else if (qMatch) {
+      lat = parseFloat(qMatch[1]);
+      lng = parseFloat(qMatch[2]);
+    }
+  }
+
+  // Fallback lat/lng coordinates around Thailand if not specified
+  if (!lat || !lng) {
+    if (bName.includes('บางนา')) { lat = 13.6682; lng = 100.6343; }
+    else if (bName.includes('รามอินทรา')) { lat = 13.8471; lng = 100.6554; }
+    else if (bName.includes('ภูเก็ต')) { lat = 7.8804; lng = 98.3923; }
+    else if (bName.includes('เชียงใหม่')) { lat = 18.7883; lng = 98.9853; }
+    else if (bName.includes('พัทยา')) { lat = 12.9236; lng = 100.8825; }
+    else {
+      lat = 13.7563 + (Math.random() - 0.5) * 0.2;
+      lng = 100.5018 + (Math.random() - 0.5) * 0.2;
+    }
+  }
+
   const newBranch = {
     id: bId,
     name: bName,
-    address: bAddress || 'ไม่ระบุที่อยู่'
+    address: bAddress || 'ไม่ระบุที่อยู่',
+    mapLink: bMap,
+    lat: lat,
+    lng: lng
   };
 
   appState.branches.push(newBranch);
@@ -657,6 +692,9 @@ function renderInventoryTable() {
             <i class="fa-solid fa-location-dot"></i> ย้ายจุด
           </button>
           ${isAdmin ? `
+            <button class="btn btn-secondary btn-sm" onclick="openEditProductModal('${p.code}')" title="แก้ไขข้อมูล & รูปภาพสินค้า">
+              <i class="fa-solid fa-pen-to-square"></i> แก้ไข
+            </button>
             <button class="btn btn-outline btn-sm" style="color: #ef4444; border-color: #fca5a5;" onclick="deleteProduct('${p.code}')">
               <i class="fa-solid fa-trash"></i>
             </button>
@@ -667,12 +705,87 @@ function renderInventoryTable() {
   `).join('');
 }
 
+// Image Uploader & Camera Capture Helper Functions
+function triggerPhotoUpload(prefix) {
+  const fileInput = document.getElementById(`${prefix}-img-file`);
+  if (fileInput) fileInput.click();
+}
+
+function handleImageFileSelect(event, prefix) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  showToast('กำลังประมวลผลและบีบอัดรูปภาพ...', 'info');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      const MAX_WIDTH = 600;
+      const MAX_HEIGHT = 600;
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+      } else {
+        if (height > MAX_HEIGHT) {
+          width = Math.round((width * MAX_HEIGHT) / height);
+          height = MAX_HEIGHT;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.75);
+
+      document.getElementById(`${prefix}-img`).value = compressedDataUrl;
+      document.getElementById(`${prefix}-img-preview`).src = compressedDataUrl;
+      showToast('อัปเดตรูปภาพเรียบร้อยแล้ว', 'success');
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function toggleUrlInput(prefix) {
+  const wrapper = document.getElementById(`${prefix}-img-url-wrapper`);
+  if (!wrapper) return;
+  wrapper.style.display = wrapper.style.display === 'none' ? 'block' : 'none';
+}
+
+function clearPhoto(prefix) {
+  document.getElementById(`${prefix}-img`).value = '';
+  document.getElementById(`${prefix}-img-preview`).src = 'https://via.placeholder.com/300x200?text=No+Image';
+  const urlInput = document.getElementById(`${prefix}-img-url-input`);
+  if (urlInput) urlInput.value = '';
+  const fileInput = document.getElementById(`${prefix}-img-file`);
+  if (fileInput) fileInput.value = '';
+  showToast('ลบรูปภาพแล้ว', 'info');
+}
+
+function handleUrlInput(val, prefix) {
+  const cleanUrl = val.trim();
+  document.getElementById(`${prefix}-img`).value = cleanUrl;
+  document.getElementById(`${prefix}-img-preview`).src = cleanUrl || 'https://via.placeholder.com/300x200?text=No+Image';
+}
+
 // Add Product Modal (Admin)
 function openAddProductModal(defaultCode = '') {
   document.getElementById('add-code').value = defaultCode || ('WD-SMP-' + String(appState.products.length + 1).padStart(3, '0'));
   document.getElementById('add-name').value = '';
   document.getElementById('add-spec').value = '';
   document.getElementById('add-img').value = '';
+  document.getElementById('add-img-preview').src = 'https://via.placeholder.com/300x200?text=No+Image';
+  document.getElementById('add-img-url-wrapper').style.display = 'none';
+  if (document.getElementById('add-img-url-input')) document.getElementById('add-img-url-input').value = '';
   document.getElementById('add-product-modal').classList.add('active');
 }
 
@@ -716,6 +829,80 @@ function handleAddProductSubmit(e) {
   }
 }
 
+// Edit Product Modal (Admin Only)
+function openEditProductModal(code) {
+  const p = appState.products.find(x => x.code === code);
+  if (!p) return;
+
+  document.getElementById('edit-code').value = p.code;
+  document.getElementById('edit-code-display').value = p.code;
+  document.getElementById('edit-name').value = p.name || '';
+  document.getElementById('edit-category').value = p.category || 'ไม้พื้น (Flooring)';
+  document.getElementById('edit-spec').value = p.spec || '';
+
+  const imgVal = p.img || '';
+  document.getElementById('edit-img').value = imgVal;
+  document.getElementById('edit-img-preview').src = imgVal || 'https://via.placeholder.com/300x200?text=No+Image';
+  document.getElementById('edit-img-url-wrapper').style.display = 'none';
+  if (document.getElementById('edit-img-url-input')) {
+    document.getElementById('edit-img-url-input').value = imgVal.startsWith('http') ? imgVal : '';
+  }
+
+  const editBranchSelect = document.getElementById('edit-branch');
+  if (editBranchSelect) {
+    editBranchSelect.innerHTML = appState.branches.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+    editBranchSelect.value = p.branch;
+  }
+
+  document.getElementById('edit-location').value = p.location || '';
+  document.getElementById('edit-status').value = p.status || 'On Display';
+  document.getElementById('edit-notes').value = p.notes || '';
+
+  document.getElementById('edit-product-modal').classList.add('active');
+}
+
+function closeEditProductModal() {
+  document.getElementById('edit-product-modal').classList.remove('active');
+}
+
+function handleEditProductSubmit(e) {
+  e.preventDefault();
+  const code = document.getElementById('edit-code').value;
+  const product = appState.products.find(p => p.code === code);
+  if (!product) return;
+
+  const name = document.getElementById('edit-name').value.trim();
+  const category = document.getElementById('edit-category').value;
+  const spec = document.getElementById('edit-spec').value.trim();
+  const img = document.getElementById('edit-img').value || 'https://images.unsplash.com/photo-1513694203232-719a280e022f?w=300&q=80';
+  const branch = document.getElementById('edit-branch').value;
+  const location = document.getElementById('edit-location').value.trim();
+  const status = document.getElementById('edit-status').value;
+  const notes = document.getElementById('edit-notes').value.trim();
+
+  const nowStr = new Date().toLocaleString('sv-SE');
+
+  product.name = name;
+  product.category = category;
+  product.spec = spec;
+  product.img = img;
+  product.branch = branch;
+  product.location = location;
+  product.status = status;
+  product.notes = notes;
+  product.updatedBy = appState.currentUser ? appState.currentUser.name : 'Admin';
+  product.updatedAt = nowStr;
+
+  saveState();
+  closeEditProductModal();
+  renderCurrentTab();
+  showToast(`อัปเดตข้อมูลสินค้า [${name}] เรียบร้อยแล้ว`, 'success');
+
+  if (appState.gasUrl) {
+    syncEditProductToGas(product);
+  }
+}
+
 function deleteProduct(code) {
   if (confirm(`คุณต้องการลบรายการตัวอย่างสินค้า ${code} ใช่หรือไม่?`)) {
     appState.products = appState.products.filter(p => p.code !== code);
@@ -740,27 +927,105 @@ function renderDashboard() {
   document.getElementById('stat-damaged-items').innerText = damaged;
 
   const tbody = document.getElementById('branch-summary-tbody');
-  if (!tbody) return;
+  if (tbody) {
+    tbody.innerHTML = appState.branches.map(b => {
+      const bItems = appState.products.filter(p => p.branch === b.id);
+      const bDisplay = bItems.filter(p => p.status === 'On Display').length;
+      const bStorage = bItems.filter(p => p.status === 'In Storage').length;
+      const bTransit = bItems.filter(p => p.status === 'In Transit').length;
+      const bDamaged = bItems.filter(p => p.status === 'Damaged').length;
 
-  tbody.innerHTML = appState.branches.map(b => {
+      const mapBtnHtml = b.mapLink 
+        ? `<a href="${b.mapLink}" target="_blank" class="btn btn-outline btn-sm" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: #10b981; border-color: #a7f3d0; text-decoration: none;"><i class="fa-solid fa-map-location-dot"></i> ดูแผนที่</a>` 
+        : `<span style="font-size: 0.75rem; color: var(--text-muted);">-</span>`;
+
+      return `
+        <tr>
+          <td><code>${b.id}</code></td>
+          <td><strong>${b.name}</strong></td>
+          <td>${mapBtnHtml}</td>
+          <td><span class="badge badge-display">${bDisplay}</span></td>
+          <td><span class="badge badge-storage">${bStorage}</span></td>
+          <td><span class="badge badge-transit">${bTransit}</span></td>
+          <td><span class="badge badge-damaged">${bDamaged}</span></td>
+          <td><strong>${bItems.length} ชิ้น</strong></td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  renderBranchMap();
+}
+
+function renderBranchMap() {
+  const mapContainer = document.getElementById('branch-map-container');
+  if (!mapContainer || typeof L === 'undefined') return;
+
+  if (appState.leafMap) {
+    appState.leafMap.remove();
+    appState.leafMap = null;
+  }
+
+  const map = L.map('branch-map-container').setView([13.7563, 100.5018], 6);
+  appState.leafMap = map;
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(map);
+
+  const bounds = [];
+
+  appState.branches.forEach(b => {
+    let lat = b.lat;
+    let lng = b.lng;
+
+    if (!lat || !lng) {
+      if (b.name.includes('บางนา')) { lat = 13.6682; lng = 100.6343; }
+      else if (b.name.includes('รามอินทรา')) { lat = 13.8471; lng = 100.6554; }
+      else if (b.name.includes('ภูเก็ต')) { lat = 7.8804; lng = 98.3923; }
+      else if (b.name.includes('เชียงใหม่')) { lat = 18.7883; lng = 98.9853; }
+      else if (b.name.includes('พัทยา')) { lat = 12.9236; lng = 100.8825; }
+      else if (b.name.includes('คลัง') || b.name.includes('หลัก')) { lat = 13.6062; lng = 100.7425; }
+      else {
+        lat = 13.7563 + (Math.random() - 0.5) * 0.2;
+        lng = 100.5018 + (Math.random() - 0.5) * 0.2;
+      }
+    }
+
+    bounds.push([lat, lng]);
+
     const bItems = appState.products.filter(p => p.branch === b.id);
     const bDisplay = bItems.filter(p => p.status === 'On Display').length;
     const bStorage = bItems.filter(p => p.status === 'In Storage').length;
-    const bTransit = bItems.filter(p => p.status === 'In Transit').length;
-    const bDamaged = bItems.filter(p => p.status === 'Damaged').length;
 
-    return `
-      <tr>
-        <td><code>${b.id}</code></td>
-        <td><strong>${b.name}</strong></td>
-        <td><span class="badge badge-display">${bDisplay}</span></td>
-        <td><span class="badge badge-storage">${bStorage}</span></td>
-        <td><span class="badge badge-transit">${bTransit}</span></td>
-        <td><span class="badge badge-damaged">${bDamaged}</span></td>
-        <td><strong>${bItems.length} ชิ้น</strong></td>
-      </tr>
+    const mapLinkBtn = b.mapLink 
+      ? `<a href="${b.mapLink}" target="_blank" class="btn btn-primary btn-sm" style="margin-top: 0.5rem; width: 100%; font-size: 0.75rem; text-decoration: none;"><i class="fa-solid fa-map-location-dot"></i> เปิดใน Google Maps</a>`
+      : '';
+
+    const popupContent = `
+      <div style="font-family: var(--font-family); min-width: 180px;">
+        <div style="font-weight: 700; font-size: 0.9375rem; color: #0f172a; margin-bottom: 0.25rem;">${b.name}</div>
+        <div style="font-size: 0.75rem; color: #64748b; margin-bottom: 0.5rem;"><i class="fa-solid fa-location-dot"></i> ${b.address || '-'}</div>
+        <div style="font-size: 0.8125rem; background: #f1f5f9; padding: 0.375rem 0.5rem; border-radius: 6px; margin-bottom: 0.375rem;">
+          <div>🟢 จัดแสดง: <strong>${bDisplay} ชิ้น</strong></div>
+          <div>🔵 ในคลัง: <strong>${bStorage} ชิ้น</strong></div>
+          <div>📦 รวมทั้งหมด: <strong>${bItems.length} ชิ้น</strong></div>
+        </div>
+        ${mapLinkBtn}
+      </div>
     `;
-  }).join('');
+
+    L.marker([lat, lng])
+      .addTo(map)
+      .bindPopup(popupContent);
+  });
+
+  if (bounds.length > 0) {
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+  }
+
+  setTimeout(() => map.invalidateSize(), 300);
 }
 
 // 4. MOVEMENT LOGS TAB LOGIC
@@ -1093,6 +1358,24 @@ async function syncProductToGas(newProduct) {
     });
   } catch (err) {
     console.warn('Failed sync new product to Google Sheets:', err);
+  }
+}
+
+async function syncEditProductToGas(product) {
+  if (!appState.gasUrl) return;
+
+  try {
+    await fetch(appState.gasUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'editProduct',
+        product: product
+      })
+    });
+  } catch (err) {
+    console.warn('Failed sync edit product to Google Sheets:', err);
   }
 }
 
