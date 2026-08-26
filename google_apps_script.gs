@@ -30,18 +30,18 @@ function setupDatabaseSheets() {
   // 2. Sheet Branches
   let bSheet = ss.getSheetByName(SHEET_BRANCHES) || ss.insertSheet(SHEET_BRANCHES);
   if (bSheet.getLastRow() === 0) {
-    bSheet.appendRow(["branch_id", "branch_name", "contact_person", "phone", "address", "map_link"]);
-    bSheet.getRange(1, 1, 1, 6).setFontWeight("bold").setBackground("#f1f5f9");
-    bSheet.appendRow(["BR-01", "สาขาบางนา (Showroom Bangna)", "คุณสมหญิง", "02-111-1111", "ถนนบางนา-ตราด กม. 4", "https://maps.app.goo.gl/pgGLhCyUzDWaEo9r9"]);
-    bSheet.appendRow(["BR-02", "สาขารามอินทรา (Ramindra)", "คุณวิชัย", "02-222-2222", "ถนนรามอินทรา กม. 8", "https://maps.google.com/?q=13.847,100.655"]);
-    bSheet.appendRow(["BR-03", "สาขาภูเก็ต (Phuket Branch)", "คุณอนันต์", "076-333-333", "อ.เมือง จ.ภูเก็ต", "https://maps.google.com/?q=7.880,98.392"]);
-    bSheet.appendRow(["BR-04", "คลังสินค้าหลัก (Central Warehouse)", "คุณสมชาย", "02-444-4444", "กิ่งแก้ว สมุทรปราการ", "https://maps.google.com/?q=13.606,100.742"]);
+    bSheet.appendRow(["branch_id", "branch_name", "contact_person", "phone", "address", "map_link", "lat", "lng"]);
+    bSheet.getRange(1, 1, 1, 8).setFontWeight("bold").setBackground("#f1f5f9");
+    bSheet.appendRow(["BR-01", "สาขาบางนา (Showroom Bangna)", "คุณสมหญิง", "02-111-1111", "ถนนบางนา-ตราด กม. 4", "https://maps.app.goo.gl/pgGLhCyUzDWaEo9r9", 13.6682, 100.6343]);
+    bSheet.appendRow(["BR-02", "สาขารามอินทรา (Ramindra)", "คุณวิชัย", "02-222-2222", "ถนนรามอินทรา กม. 8", "https://maps.google.com/?q=13.847,100.655", 13.8471, 100.6554]);
+    bSheet.appendRow(["BR-03", "สาขาภูเก็ต (Phuket Branch)", "คุณอนันต์", "076-333-333", "อ.เมือง จ.ภูเก็ต", "https://maps.google.com/?q=7.880,98.392", 7.8804, 98.3923]);
+    bSheet.appendRow(["BR-04", "คลังสินค้าหลัก (Central Warehouse)", "คุณสมชาย", "02-444-4444", "กิ่งแก้ว สมุทรปราการ", "https://maps.google.com/?q=13.606,100.742", 13.6062, 100.7425]);
   } else {
-    // Auto upgrade header row 1 to include map_link column 6 if missing
-    const headerRow = bSheet.getRange(1, 1, 1, 6).getValues()[0];
-    if (!headerRow[5] || headerRow[5] === '') {
-      bSheet.getRange(1, 6).setValue("map_link").setFontWeight("bold").setBackground("#f1f5f9");
-    }
+    // Auto upgrade header row 1 to include map_link, lat, lng columns if missing
+    const headerRow = bSheet.getRange(1, 1, 1, 8).getValues()[0];
+    if (!headerRow[5] || headerRow[5] === '') bSheet.getRange(1, 6).setValue("map_link").setFontWeight("bold").setBackground("#f1f5f9");
+    if (!headerRow[6] || headerRow[6] === '') bSheet.getRange(1, 7).setValue("lat").setFontWeight("bold").setBackground("#f1f5f9");
+    if (!headerRow[7] || headerRow[7] === '') bSheet.getRange(1, 8).setValue("lng").setFontWeight("bold").setBackground("#f1f5f9");
   }
 
   // 3. Sheet Current_Placement
@@ -355,7 +355,9 @@ function getAllBranches() {
       contact: row[2],
       phone: row[3],
       address: row[4],
-      mapLink: row[5] || ''
+      mapLink: row[5] || '',
+      lat: row[6] !== undefined && row[6] !== '' ? parseFloat(row[6]) : null,
+      lng: row[7] !== undefined && row[7] !== '' ? parseFloat(row[7]) : null
     });
   }
   return branches;
@@ -365,11 +367,11 @@ function createNewBranch(branch) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const bSheet = ss.getSheetByName(SHEET_BRANCHES);
 
-  // Auto ensure column 6 has map_link header
-  const headerRow = bSheet.getRange(1, 1, 1, 6).getValues()[0];
-  if (!headerRow[5] || headerRow[5] === '') {
-    bSheet.getRange(1, 6).setValue("map_link").setFontWeight("bold").setBackground("#f1f5f9");
-  }
+  // Auto ensure column 6, 7, 8 have headers
+  const headerRow = bSheet.getRange(1, 1, 1, 8).getValues()[0];
+  if (!headerRow[5] || headerRow[5] === '') bSheet.getRange(1, 6).setValue("map_link").setFontWeight("bold").setBackground("#f1f5f9");
+  if (!headerRow[6] || headerRow[6] === '') bSheet.getRange(1, 7).setValue("lat").setFontWeight("bold").setBackground("#f1f5f9");
+  if (!headerRow[7] || headerRow[7] === '') bSheet.getRange(1, 8).setValue("lng").setFontWeight("bold").setBackground("#f1f5f9");
 
   const data = bSheet.getDataRange().getValues();
   let foundRow = -1;
@@ -382,13 +384,15 @@ function createNewBranch(branch) {
   }
 
   if (foundRow > -1) {
-    bSheet.getRange(foundRow, 1, 1, 6).setValues([[
+    bSheet.getRange(foundRow, 1, 1, 8).setValues([[
       branch.id,
       branch.name,
       '-',
       '-',
       branch.address || '',
-      branch.mapLink || ''
+      branch.mapLink || '',
+      branch.lat || '',
+      branch.lng || ''
     ]]);
   } else {
     bSheet.appendRow([
@@ -397,7 +401,9 @@ function createNewBranch(branch) {
       '-',
       '-',
       branch.address || '',
-      branch.mapLink || ''
+      branch.mapLink || '',
+      branch.lat || '',
+      branch.lng || ''
     ]);
   }
 }

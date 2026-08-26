@@ -180,6 +180,9 @@ function loadState() {
   appState.currentUser = savedCurrentUser ? JSON.parse(savedCurrentUser) : null;
   appState.gasUrl = savedGasUrl || DEFAULT_GAS_URL;
 
+  appState.branches.forEach(b => resolveBranchCoordinates(b));
+  setTimeout(() => ensureAllBranchesHaveCoords(), 500);
+
   if (document.getElementById('gas-url-input')) {
     document.getElementById('gas-url-input').value = appState.gasUrl;
   }
@@ -316,6 +319,76 @@ function openAddBranchModal() {
 
 function closeAddBranchModal() {
   document.getElementById('add-branch-modal').classList.remove('active');
+}
+
+const THAI_PROVINCE_COORDS_MAP = [
+  { keywords: ['อุบลราชธานี', 'อุบล', 'ubon'], lat: 15.2294, lng: 104.8574 },
+  { keywords: ['ระยอง', 'rayong'], lat: 12.6814, lng: 101.2816 },
+  { keywords: ['เชียงใหม่', 'chiangmai', 'chiang mai'], lat: 18.7883, lng: 98.9853 },
+  { keywords: ['ภูเก็ต', 'phuket'], lat: 7.8804, lng: 98.3923 },
+  { keywords: ['กาญจนบุรี', 'kanchanaburi'], lat: 14.0227, lng: 99.5328 },
+  { keywords: ['อุดรธานี', 'อุดร', 'udon'], lat: 17.4138, lng: 102.7872 },
+  { keywords: ['พิษณุโลก', 'phitsanulok'], lat: 16.8211, lng: 100.2659 },
+  { keywords: ['ตาก', 'tak'], lat: 16.8839, lng: 99.1258 },
+  { keywords: ['นวนคร', 'navanakorn'], lat: 14.1251692, lng: 100.5958271 },
+  { keywords: ['ติวานนท์', 'tiwanon'], lat: 13.8824, lng: 100.5186 },
+  { keywords: ['บางนา', 'bangna'], lat: 13.6682, lng: 100.6343 },
+  { keywords: ['รามอินทรา', 'ramindra'], lat: 13.8471, lng: 100.6554 },
+  { keywords: ['ชลบุรี', 'พัทยา', 'chonburi', 'pattaya'], lat: 12.9236, lng: 100.8825 },
+  { keywords: ['สงขลา', 'หาดใหญ่', 'hatyai', 'songkhla'], lat: 7.0086, lng: 100.4747 },
+  { keywords: ['ขอนแก่น', 'khon kaen', 'khonkaen'], lat: 16.4419, lng: 102.8360 },
+  { keywords: ['นครราชสีมา', 'โคราช', 'korat'], lat: 14.9799, lng: 102.0978 },
+  { keywords: ['สุราษฎร์ธานี', 'สุราษฎร์', 'surat'], lat: 9.1382, lng: 99.3217 },
+  { keywords: ['นนทบุรี', 'ปากเกร็ด', 'nonthaburi'], lat: 13.8591, lng: 100.5217 },
+  { keywords: ['ปทุมธานี', 'รังสิต', 'pathumthani'], lat: 13.9877, lng: 100.6175 },
+  { keywords: ['สมุทรปราการ', 'กิ่งแก้ว', 'samutprakan'], lat: 13.6062, lng: 100.7425 }
+];
+
+function resolveBranchCoordinates(b) {
+  if (b.lat && b.lng && typeof b.lat === 'number' && typeof b.lng === 'number' && !isNaN(b.lat) && !isNaN(b.lng)) {
+    return { lat: b.lat, lng: b.lng };
+  }
+
+  if (b.mapLink) {
+    const parsed = parseCoordinatesFromUrl(b.mapLink);
+    if (parsed) {
+      b.lat = parsed.lat;
+      b.lng = parsed.lng;
+      return parsed;
+    }
+  }
+
+  const textToSearch = `${b.name || ''} ${b.address || ''}`.toLowerCase();
+  for (const entry of THAI_PROVINCE_COORDS_MAP) {
+    if (entry.keywords.some(kw => textToSearch.includes(kw.toLowerCase()))) {
+      b.lat = entry.lat;
+      b.lng = entry.lng;
+      return { lat: entry.lat, lng: entry.lng };
+    }
+  }
+
+  b.lat = 13.7563;
+  b.lng = 100.5018;
+  return { lat: b.lat, lng: b.lng };
+}
+
+async function ensureAllBranchesHaveCoords() {
+  let updated = false;
+  for (const b of appState.branches) {
+    resolveBranchCoordinates(b);
+    if (!b.lat || !b.lng || (b.lat === 13.7563 && b.lng === 100.5018)) {
+      const geo = await geocodeBranchLocation(b.name, b.address);
+      if (geo) {
+        b.lat = geo.lat;
+        b.lng = geo.lng;
+        updated = true;
+      }
+    }
+  }
+  if (updated) {
+    saveState();
+    if (appState.gasUrl) syncAllBranchesToGas();
+  }
 }
 
 function parseCoordinatesFromUrl(url) {
@@ -1041,32 +1114,9 @@ function renderBranchMap() {
   const bounds = [];
 
   appState.branches.forEach(b => {
-    let lat = b.lat;
-    let lng = b.lng;
-
-    if (!lat || !lng) {
-      if (b.mapLink) {
-        const parsed = parseCoordinatesFromUrl(b.mapLink);
-        if (parsed) {
-          lat = parsed.lat;
-          lng = parsed.lng;
-        }
-      }
-    }
-
-    if (!lat || !lng) {
-      if (b.name.includes('นวนคร') || (b.mapLink && b.mapLink.includes('AMmZtWbAc9dJ3dcJ9'))) { lat = 14.1251692; lng = 100.5958271; }
-      else if (b.name.includes('บางนา')) { lat = 13.6682; lng = 100.6343; }
-      else if (b.name.includes('รามอินทรา')) { lat = 13.8471; lng = 100.6554; }
-      else if (b.name.includes('ภูเก็ต')) { lat = 7.8804; lng = 98.3923; }
-      else if (b.name.includes('เชียงใหม่')) { lat = 18.7883; lng = 98.9853; }
-      else if (b.name.includes('พัทยา')) { lat = 12.9236; lng = 100.8825; }
-      else if (b.name.includes('คลัง') || b.name.includes('หลัก')) { lat = 13.6062; lng = 100.7425; }
-      else {
-        lat = 13.7563 + (Math.random() - 0.5) * 0.2;
-        lng = 100.5018 + (Math.random() - 0.5) * 0.2;
-      }
-    }
+    const coords = resolveBranchCoordinates(b);
+    const lat = coords.lat;
+    const lng = coords.lng;
 
     bounds.push([lat, lng]);
 
@@ -1332,6 +1382,8 @@ async function fetchInitialDataFromGas() {
     const data = await res.json();
     if (data && data.status === 'success' && Array.isArray(data.branches) && data.branches.length > 0) {
       appState.branches = data.branches;
+      appState.branches.forEach(b => resolveBranchCoordinates(b));
+      ensureAllBranchesHaveCoords();
       hasUpdates = true;
     }
   } catch (err) {
