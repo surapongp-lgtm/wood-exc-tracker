@@ -58,11 +58,11 @@ function setupDatabaseSheets() {
   // 4. Sheet Scan_History
   let logSheet = ss.getSheetByName(SHEET_HISTORY) || ss.insertSheet(SHEET_HISTORY);
   if (logSheet.getLastRow() === 0) {
-    logSheet.appendRow(["log_id", "timestamp", "item_code", "item_name", "action_type", "branch_id", "location_detail", "status", "staff_name", "notes", "damaged_img"]);
-    logSheet.getRange(1, 1, 1, 11).setFontWeight("bold").setBackground("#f1f5f9");
+    logSheet.appendRow(["log_id", "timestamp", "item_code", "item_name", "action_type", "from_branch", "from_location", "to_branch", "to_location", "status", "staff_name", "notes", "damaged_img"]);
+    logSheet.getRange(1, 1, 1, 13).setFontWeight("bold").setBackground("#f1f5f9");
   } else {
-    const headerRow = logSheet.getRange(1, 1, 1, 11).getValues()[0];
-    if (!headerRow[10] || headerRow[10] === '') logSheet.getRange(1, 11).setValue("damaged_img").setFontWeight("bold").setBackground("#f1f5f9");
+    const headerRow = logSheet.getRange(1, 1, 1, 13).getValues()[0];
+    if (!headerRow[12] || headerRow[12] === '') logSheet.getRange(1, 13).setValue("damaged_img").setFontWeight("bold").setBackground("#f1f5f9");
   }
 
   // 5. Sheet Users (เก็บบัญชีผู้ใช้และรหัสผ่าน)
@@ -285,6 +285,8 @@ function updateLocationAndLog(product, log) {
     product.code,
     product.name,
     'UPDATE_LOCATION',
+    log ? (log.fromBranchName || log.fromBranch || '') : '',
+    log ? (log.fromLocation || '') : '',
     product.branch,
     product.location,
     product.status,

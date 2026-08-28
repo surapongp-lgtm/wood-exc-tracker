@@ -837,6 +837,10 @@ function handleLocationUpdateSubmit(e) {
 
   const nowStr = new Date().toLocaleString('sv-SE');
 
+  const prevBranch = product.branch || '';
+  const prevBranchName = getBranchName(prevBranch);
+  const prevLocation = product.location || '';
+
   product.branch = branch;
   product.location = location;
   product.status = status;
@@ -851,6 +855,9 @@ function handleLocationUpdateSubmit(e) {
     code: product.code,
     name: product.name,
     action: 'UPDATE_LOCATION',
+    fromBranch: prevBranch,
+    fromBranchName: prevBranchName,
+    fromLocation: prevLocation,
     branch: branch,
     branchName: getBranchName(branch),
     location: location,
@@ -1259,6 +1266,14 @@ function renderBranchMap() {
 }
 
 // 4. MOVEMENT LOGS TAB LOGIC
+let currentLogsPage = 1;
+
+function changeLogsPage(delta) {
+  currentLogsPage += delta;
+  if (currentLogsPage < 1) currentLogsPage = 1;
+  renderLogsTable();
+}
+
 function renderLogsTable() {
   const tbody = document.getElementById('logs-tbody');
   if (!tbody) return;
@@ -1269,37 +1284,65 @@ function renderLogsTable() {
     l.name.toLowerCase().includes(searchVal) || 
     l.code.toLowerCase().includes(searchVal) || 
     (l.staff && l.staff.toLowerCase().includes(searchVal)) || 
-    (l.branchName && l.branchName.toLowerCase().includes(searchVal))
+    (l.branchName && l.branchName.toLowerCase().includes(searchVal)) ||
+    (l.fromBranchName && l.fromBranchName.toLowerCase().includes(searchVal))
   );
 
-  if (filtered.length === 0) {
+  const totalLogs = filtered.length;
+  const pageSize = 20;
+  const maxPage = Math.max(1, Math.ceil(totalLogs / pageSize));
+  if (currentLogsPage > maxPage) currentLogsPage = maxPage;
+
+  const startIdx = (currentLogsPage - 1) * pageSize;
+  const pageLogs = filtered.slice(startIdx, startIdx + pageSize);
+
+  // Update Pagination Controls UI
+  const pageInfo = document.getElementById('logs-page-info');
+  const pageLabel = document.getElementById('logs-current-page-label');
+  const prevBtn = document.getElementById('logs-prev-btn');
+  const nextBtn = document.getElementById('logs-next-btn');
+
+  if (pageInfo) {
+    const endIdx = Math.min(startIdx + pageSize, totalLogs);
+    pageInfo.innerText = totalLogs > 0 ? `แสดง ${startIdx + 1} - ${endIdx} จากทั้งหมด ${totalLogs} รายการ` : `แสดง 0 จาก 0 รายการ`;
+  }
+  if (pageLabel) pageLabel.innerText = `หน้า ${currentLogsPage} / ${maxPage}`;
+  if (prevBtn) prevBtn.disabled = currentLogsPage <= 1;
+  if (nextBtn) nextBtn.disabled = currentLogsPage >= maxPage;
+
+  if (pageLogs.length === 0) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">ยังไม่มีประวัติการบันทึก</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = filtered.map(l => `
-    <tr>
-      <td style="font-size: 0.8125rem; color: var(--text-muted); white-space: nowrap;">${l.timestamp}</td>
-      <td>
-        <div style="font-weight: 600;">${l.name}</div>
-        <div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">${l.code}</div>
-      </td>
-      <td><span style="font-size: 0.75rem; background: var(--bg-subtle); padding: 2px 6px; border-radius: 4px;">${l.action}</span></td>
-      <td><strong>${l.branchName || getBranchName(l.branch)}</strong></td>
-      <td>${l.location}</td>
-      <td>
-        ${getStatusBadge(l.status)}
-        ${l.damagedImg ? `<br><a href="${l.damagedImg}" target="_blank" style="font-size:0.75rem; color:#be123c; text-decoration:none; margin-top:2px; display:inline-block;"><i class="fa-solid fa-camera"></i> ดูรูปสินค้าชำรุด</a>` : ''}
-      </td>
-      <td><i class="fa-solid fa-user" style="font-size: 0.75rem; color: var(--text-muted);"></i> ${l.staff}</td>
-    </tr>
-  `).join('');
+  tbody.innerHTML = pageLogs.map(l => {
+    const fromText = l.fromBranchName 
+      ? `<div><strong>${l.fromBranchName}</strong></div><div style="font-size:0.75rem; color:var(--text-muted);">${l.fromLocation || '-'}</div>`
+      : `<span style="font-size: 0.75rem; color: var(--text-muted);">- (แรกเข้า)</span>`;
+
+    const toText = `<div><strong>${l.branchName || getBranchName(l.branch)}</strong></div><div style="font-size:0.75rem; color:var(--text-muted);">${l.location || '-'}</div>`;
+
+    return `
+      <tr>
+        <td style="font-size: 0.8125rem; color: var(--text-muted); white-space: nowrap;">${l.timestamp}</td>
+        <td>
+          <div style="font-weight: 600;">${l.name}</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">${l.code}</div>
+        </td>
+        <td><span style="font-size: 0.75rem; background: var(--bg-subtle); padding: 2px 6px; border-radius: 4px;">${l.action}</span></td>
+        <td>${fromText}</td>
+        <td>${toText}</td>
+        <td>${getStatusBadge(l.status)}</td>
+        <td><i class="fa-solid fa-user" style="font-size: 0.75rem; color: var(--text-muted);"></i> ${l.staff}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
 function exportLogsCSV() {
-  let csv = "Timestamp,ItemCode,ItemName,Action,Branch,Location,Status,Staff\n";
+  let csv = "Timestamp,ItemCode,ItemName,Action,FromBranch,FromLocation,ToBranch,ToLocation,Status,Staff\n";
   appState.logs.forEach(l => {
-    csv += `"${l.timestamp}","${l.code}","${l.name}","${l.action}","${l.branchName}","${l.location}","${l.status}","${l.staff}"\n`;
+    csv += `"${l.timestamp}","${l.code}","${l.name}","${l.action}","${l.fromBranchName || ''}","${l.fromLocation || ''}","${l.branchName || ''}","${l.location || ''}","${l.status}","${l.staff}"\n`;
   });
 
   const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
