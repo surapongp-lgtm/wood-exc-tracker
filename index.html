@@ -125,6 +125,22 @@
             </tbody>
           </table>
         </div>
+
+        <!-- Quick Items Pagination Controls (20 items per page) -->
+        <div id="quick-pagination" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 0.5rem 0.25rem 0.5rem; flex-wrap: wrap; gap: 0.5rem; border-top: 1px solid var(--border); margin-top: 0.5rem;">
+          <div style="font-size: 0.8125rem; color: var(--text-muted);" id="quick-page-info">
+            แสดง 1 - 20 จากทั้งหมด 0 รายการ
+          </div>
+          <div style="display: flex; gap: 0.375rem; align-items: center;">
+            <button class="btn btn-outline btn-sm" id="quick-prev-btn" onclick="changeQuickPage(-1)">
+              <i class="fa-solid fa-chevron-left"></i> ก่อนหน้า
+            </button>
+            <span style="font-size: 0.8125rem; font-weight: 600; padding: 0 0.5rem;" id="quick-current-page-label">หน้า 1 / 1</span>
+            <button class="btn btn-outline btn-sm" id="quick-next-btn" onclick="changeQuickPage(1)">
+              ถัดไป <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -170,6 +186,22 @@
               <!-- Rendered via JS -->
             </tbody>
           </table>
+        </div>
+
+        <!-- Inventory Pagination Controls (20 items per page) -->
+        <div id="inv-pagination" style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 0.5rem 0.25rem 0.5rem; flex-wrap: wrap; gap: 0.5rem; border-top: 1px solid var(--border); margin-top: 0.5rem;">
+          <div style="font-size: 0.8125rem; color: var(--text-muted);" id="inv-page-info">
+            แสดง 1 - 20 จากทั้งหมด 0 รายการ
+          </div>
+          <div style="display: flex; gap: 0.375rem; align-items: center;">
+            <button class="btn btn-outline btn-sm" id="inv-prev-btn" onclick="changeInvPage(-1)">
+              <i class="fa-solid fa-chevron-left"></i> ก่อนหน้า
+            </button>
+            <span style="font-size: 0.8125rem; font-weight: 600; padding: 0 0.5rem;" id="inv-current-page-label">หน้า 1 / 1</span>
+            <button class="btn btn-outline btn-sm" id="inv-next-btn" onclick="changeInvPage(1)">
+              ถัดไป <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
         </div>
       </div>
     </section>

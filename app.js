@@ -584,6 +584,14 @@ function getStatusBadge(status) {
 }
 
 // 1. SCAN TAB LOGIC
+let currentQuickPage = 1;
+
+function changeQuickPage(delta) {
+  currentQuickPage += delta;
+  if (currentQuickPage < 1) currentQuickPage = 1;
+  renderQuickItems();
+}
+
 function renderQuickItems() {
   const tbody = document.getElementById('quick-items-tbody');
   const searchVal = (document.getElementById('quick-search-input')?.value || '').toLowerCase();
@@ -595,12 +603,34 @@ function renderQuickItems() {
     getBranchName(p.branch).toLowerCase().includes(searchVal)
   );
 
-  if (filtered.length === 0) {
+  const totalItems = filtered.length;
+  const pageSize = 20;
+  const maxPage = Math.max(1, Math.ceil(totalItems / pageSize));
+  if (currentQuickPage > maxPage) currentQuickPage = maxPage;
+
+  const startIdx = (currentQuickPage - 1) * pageSize;
+  const pageItems = filtered.slice(startIdx, startIdx + pageSize);
+
+  // Update Quick Pagination Controls UI
+  const pageInfo = document.getElementById('quick-page-info');
+  const pageLabel = document.getElementById('quick-current-page-label');
+  const prevBtn = document.getElementById('quick-prev-btn');
+  const nextBtn = document.getElementById('quick-next-btn');
+
+  if (pageInfo) {
+    const endIdx = Math.min(startIdx + pageSize, totalItems);
+    pageInfo.innerText = totalItems > 0 ? `แสดง ${startIdx + 1} - ${endIdx} จากทั้งหมด ${totalItems} รายการ` : `แสดง 0 จาก 0 รายการ`;
+  }
+  if (pageLabel) pageLabel.innerText = `หน้า ${currentQuickPage} / ${maxPage}`;
+  if (prevBtn) prevBtn.disabled = currentQuickPage <= 1;
+  if (nextBtn) nextBtn.disabled = currentQuickPage >= maxPage;
+
+  if (pageItems.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 2rem;">ไม่พบข้อมูลสินค้าตัวอย่าง</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = filtered.map(p => `
+  tbody.innerHTML = pageItems.map(p => `
     <tr>
       <td>
         <div class="product-cell">
@@ -880,6 +910,14 @@ function handleLocationUpdateSubmit(e) {
 }
 
 // 2. INVENTORY TAB LOGIC
+let currentInvPage = 1;
+
+function changeInvPage(delta) {
+  currentInvPage += delta;
+  if (currentInvPage < 1) currentInvPage = 1;
+  renderInventoryTable();
+}
+
 function renderInventoryTable() {
   const tbody = document.getElementById('inventory-tbody');
   if (!tbody) return;
@@ -895,14 +933,36 @@ function renderInventoryTable() {
     return matchSearch && matchBranch && matchStatus;
   });
 
-  if (filtered.length === 0) {
+  const totalItems = filtered.length;
+  const pageSize = 20;
+  const maxPage = Math.max(1, Math.ceil(totalItems / pageSize));
+  if (currentInvPage > maxPage) currentInvPage = maxPage;
+
+  const startIdx = (currentInvPage - 1) * pageSize;
+  const pageItems = filtered.slice(startIdx, startIdx + pageSize);
+
+  // Update Inventory Pagination Controls UI
+  const pageInfo = document.getElementById('inv-page-info');
+  const pageLabel = document.getElementById('inv-current-page-label');
+  const prevBtn = document.getElementById('inv-prev-btn');
+  const nextBtn = document.getElementById('inv-next-btn');
+
+  if (pageInfo) {
+    const endIdx = Math.min(startIdx + pageSize, totalItems);
+    pageInfo.innerText = totalItems > 0 ? `แสดง ${startIdx + 1} - ${endIdx} จากทั้งหมด ${totalItems} รายการ` : `แสดง 0 จาก 0 รายการ`;
+  }
+  if (pageLabel) pageLabel.innerText = `หน้า ${currentInvPage} / ${maxPage}`;
+  if (prevBtn) prevBtn.disabled = currentInvPage <= 1;
+  if (nextBtn) nextBtn.disabled = currentInvPage >= maxPage;
+
+  if (pageItems.length === 0) {
     tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 2rem;">ไม่พบข้อมูลรายการสินค้า</td></tr>`;
     return;
   }
 
   const isAdmin = appState.currentUser && appState.currentUser.role === 'admin';
 
-  tbody.innerHTML = filtered.map(p => `
+  tbody.innerHTML = pageItems.map(p => `
     <tr>
       <td>
         <div class="product-cell">
