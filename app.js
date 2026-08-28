@@ -700,6 +700,84 @@ function processScannedQr(qrData) {
   }
 }
 
+// Damaged Photo Capture & Upload Helper Logic
+function handleUpdateStatusChange() {
+  const statusSelect = document.getElementById('update-status-select');
+  const damagedGroup = document.getElementById('damaged-photo-group');
+  if (!statusSelect || !damagedGroup) return;
+
+  if (statusSelect.value === 'Damaged') {
+    damagedGroup.style.display = 'block';
+  } else {
+    damagedGroup.style.display = 'none';
+  }
+}
+
+function triggerDamagedPhotoUpload() {
+  const input = document.getElementById('damaged-photo-input');
+  if (input) input.click();
+}
+
+function handleDamagedPhotoSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  showToast('กำลังประมวลผลและบีบอัดรูปภาพสินค้าชำรุด...', 'info');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+      const MAX_SIZE = 800;
+
+      if (width > height) {
+        if (width > MAX_SIZE) {
+          height *= MAX_SIZE / width;
+          width = MAX_SIZE;
+        }
+      } else {
+        if (height > MAX_SIZE) {
+          width *= MAX_SIZE / height;
+          height = MAX_SIZE;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.75);
+
+      document.getElementById('damaged-img-data').value = compressedDataUrl;
+      document.getElementById('damaged-img-preview').src = compressedDataUrl;
+      document.getElementById('damaged-preview-wrapper').style.display = 'block';
+      document.getElementById('damaged-clear-btn').style.display = 'inline-block';
+
+      showToast('ถ่ายภาพ/เลือกรูปสินค้าชำรุดเรียบร้อยแล้ว', 'success');
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearDamagedPhoto() {
+  const dataInput = document.getElementById('damaged-img-data');
+  const previewImg = document.getElementById('damaged-img-preview');
+  const wrapper = document.getElementById('damaged-preview-wrapper');
+  const clearBtn = document.getElementById('damaged-clear-btn');
+  const fileInput = document.getElementById('damaged-photo-input');
+
+  if (dataInput) dataInput.value = '';
+  if (previewImg) previewImg.src = '';
+  if (wrapper) wrapper.style.display = 'none';
+  if (clearBtn) clearBtn.style.display = 'none';
+  if (fileInput) fileInput.value = '';
+}
+
 // Update Modal Form
 function openUpdateModalForCode(itemCode) {
   const p = appState.products.find(x => x.code === itemCode);
@@ -714,7 +792,17 @@ function openUpdateModalForCode(itemCode) {
   document.getElementById('update-branch-select').value = p.branch;
   document.getElementById('update-location-detail').value = p.location || '';
   document.getElementById('update-status-select').value = p.status || 'On Display';
-  
+
+  // Reset damaged photo section
+  clearDamagedPhoto();
+  if (p.damagedImg) {
+    document.getElementById('damaged-img-data').value = p.damagedImg;
+    document.getElementById('damaged-img-preview').src = p.damagedImg;
+    document.getElementById('damaged-preview-wrapper').style.display = 'block';
+    document.getElementById('damaged-clear-btn').style.display = 'inline-block';
+  }
+  handleUpdateStatusChange();
+
   if (appState.currentUser) {
     document.getElementById('update-staff-name').value = appState.currentUser.name;
   } else {
@@ -737,6 +825,12 @@ function handleLocationUpdateSubmit(e) {
   const status = document.getElementById('update-status-select').value;
   const staff = document.getElementById('update-staff-name').value;
   const notes = document.getElementById('update-notes').value;
+  const damagedImg = document.getElementById('damaged-img-data')?.value || '';
+
+  if (status === 'Damaged' && !damagedImg) {
+    showToast('โปรดถ่ายภาพหรือแนบรูปสินค้าชำรุดก่อนทำการบันทึก', 'error');
+    return;
+  }
 
   const product = appState.products.find(p => p.code === code);
   if (!product) return;
@@ -749,6 +843,7 @@ function handleLocationUpdateSubmit(e) {
   product.updatedBy = staff;
   product.updatedAt = nowStr;
   product.notes = notes;
+  product.damagedImg = status === 'Damaged' ? damagedImg : (product.damagedImg || '');
 
   const newLog = {
     id: 'LOG-' + Math.floor(100000 + Math.random() * 900000),
@@ -761,7 +856,8 @@ function handleLocationUpdateSubmit(e) {
     location: location,
     status: status,
     staff: staff,
-    notes: notes
+    notes: notes,
+    damagedImg: status === 'Damaged' ? damagedImg : ''
   };
 
   appState.logs.unshift(newLog);
@@ -769,7 +865,7 @@ function handleLocationUpdateSubmit(e) {
   closeUpdateModal();
   renderCurrentTab();
 
-  showToast(`บันทึกตำแหน่งของ [${product.name}] เรียบร้อยแล้ว`, 'success');
+  showToast(`บันทึกตำแหน่งและสถานะของ [${product.name}] เรียบร้อยแล้ว`, 'success');
 
   if (appState.gasUrl) {
     syncUpdateToGas(product, newLog);
@@ -816,7 +912,16 @@ function renderInventoryTable() {
       </td>
       <td><strong>${getBranchName(p.branch)}</strong></td>
       <td>${p.location || '-'}</td>
-      <td>${getStatusBadge(p.status)}</td>
+      <td>
+        ${getStatusBadge(p.status)}
+        ${p.damagedImg ? `
+          <div style="margin-top: 0.375rem;">
+            <a href="${p.damagedImg}" target="_blank" download class="btn btn-outline btn-sm" style="padding: 0.15rem 0.4rem; font-size: 0.72rem; color: #be123c; border-color: #f43f5e; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem;">
+              <i class="fa-solid fa-download"></i> รูปสินค้าชำรุด
+            </a>
+          </div>
+        ` : ''}
+      </td>
       <td>
         <button class="btn btn-secondary btn-sm" onclick="openQrPrintModal('${p.code}')">
           <i class="fa-solid fa-qrcode"></i> พิมพ์ป้าย QR
@@ -1182,7 +1287,10 @@ function renderLogsTable() {
       <td><span style="font-size: 0.75rem; background: var(--bg-subtle); padding: 2px 6px; border-radius: 4px;">${l.action}</span></td>
       <td><strong>${l.branchName || getBranchName(l.branch)}</strong></td>
       <td>${l.location}</td>
-      <td>${getStatusBadge(l.status)}</td>
+      <td>
+        ${getStatusBadge(l.status)}
+        ${l.damagedImg ? `<br><a href="${l.damagedImg}" target="_blank" style="font-size:0.75rem; color:#be123c; text-decoration:none; margin-top:2px; display:inline-block;"><i class="fa-solid fa-camera"></i> ดูรูปสินค้าชำรุด</a>` : ''}
+      </td>
       <td><i class="fa-solid fa-user" style="font-size: 0.75rem; color: var(--text-muted);"></i> ${l.staff}</td>
     </tr>
   `).join('');

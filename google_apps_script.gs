@@ -47,16 +47,22 @@ function setupDatabaseSheets() {
   // 3. Sheet Current_Placement
   let placeSheet = ss.getSheetByName(SHEET_PLACEMENT) || ss.insertSheet(SHEET_PLACEMENT);
   if (placeSheet.getLastRow() === 0) {
-    placeSheet.appendRow(["item_code", "current_branch_id", "location_detail", "status", "updated_by", "updated_at", "notes"]);
-    placeSheet.getRange(1, 1, 1, 7).setFontWeight("bold").setBackground("#f1f5f9");
-    placeSheet.appendRow(["WD-SMP-001", "BR-01", "ชั้นวาง A2 โซนหน้าโชว์รูม", "On Display", "สมหญิง ใจดี (บางนา)", new Date(), "ตัวอย่างติดป้ายราคาสมบูรณ์"]);
+    placeSheet.appendRow(["item_code", "current_branch_id", "location_detail", "status", "updated_by", "updated_at", "notes", "damaged_img"]);
+    placeSheet.getRange(1, 1, 1, 8).setFontWeight("bold").setBackground("#f1f5f9");
+    placeSheet.appendRow(["WD-SMP-001", "BR-01", "ชั้นวาง A2 โซนหน้าโชว์รูม", "On Display", "สมหญิง ใจดี (บางนา)", new Date(), "ตัวอย่างติดป้ายราคาสมบูรณ์", ""]);
+  } else {
+    const headerRow = placeSheet.getRange(1, 1, 1, 8).getValues()[0];
+    if (!headerRow[7] || headerRow[7] === '') placeSheet.getRange(1, 8).setValue("damaged_img").setFontWeight("bold").setBackground("#f1f5f9");
   }
 
   // 4. Sheet Scan_History
   let logSheet = ss.getSheetByName(SHEET_HISTORY) || ss.insertSheet(SHEET_HISTORY);
   if (logSheet.getLastRow() === 0) {
-    logSheet.appendRow(["log_id", "timestamp", "item_code", "item_name", "action_type", "branch_id", "location_detail", "status", "staff_name", "notes"]);
-    logSheet.getRange(1, 1, 1, 10).setFontWeight("bold").setBackground("#f1f5f9");
+    logSheet.appendRow(["log_id", "timestamp", "item_code", "item_name", "action_type", "branch_id", "location_detail", "status", "staff_name", "notes", "damaged_img"]);
+    logSheet.getRange(1, 1, 1, 11).setFontWeight("bold").setBackground("#f1f5f9");
+  } else {
+    const headerRow = logSheet.getRange(1, 1, 1, 11).getValues()[0];
+    if (!headerRow[10] || headerRow[10] === '') logSheet.getRange(1, 11).setValue("damaged_img").setFontWeight("bold").setBackground("#f1f5f9");
   }
 
   // 5. Sheet Users (เก็บบัญชีผู้ใช้และรหัสผ่าน)
@@ -133,6 +139,39 @@ function doPost(e) {
 // HELPER FUNCTIONS FOR GOOGLE SHEETS MANIPULATION
 // -----------------------------------------------------------------------------
 
+function saveImageToDrive(base64Data, fileName) {
+  try {
+    if (!base64Data || typeof base64Data !== 'string' || !base64Data.startsWith('data:image')) {
+      return base64Data || '';
+    }
+
+    const parts = base64Data.split(',');
+    const mimeMatch = parts[0].match(/:(.*?);/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const rawData = Utilities.base64Decode(parts[1]);
+    const blob = Utilities.newBlob(rawData, mimeType, fileName);
+
+    const folderName = "Wood_Exc_Damaged_Photos";
+    const folders = DriveApp.getFoldersByName(folderName);
+    let folder;
+    if (folders.hasNext()) {
+      folder = folders.next();
+    } else {
+      folder = DriveApp.createFolder(folderName);
+    }
+    
+    folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    const file = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+    return file.getUrl();
+  } catch (err) {
+    Logger.log("Error saving image to Google Drive: " + err.toString());
+    return base64Data;
+  }
+}
+
 function getAllProductsWithLocation() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const pSheet = ss.getSheetByName(SHEET_PRODUCTS);
@@ -154,7 +193,8 @@ function getAllProductsWithLocation() {
       status: 'In Storage',
       updatedBy: 'System',
       updatedAt: '-',
-      notes: ''
+      notes: '',
+      damagedImg: ''
     };
 
     for (let j = 1; j < placeData.length; j++) {
@@ -165,7 +205,8 @@ function getAllProductsWithLocation() {
           status: placeData[j][3],
           updatedBy: placeData[j][4],
           updatedAt: Utilities.formatDate(new Date(placeData[j][5]), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"),
-          notes: placeData[j][6]
+          notes: placeData[j][6],
+          damagedImg: placeData[j][7] || ''
         };
         break;
       }
@@ -182,7 +223,8 @@ function getAllProductsWithLocation() {
       status: placementInfo.status,
       updatedBy: placementInfo.updatedBy,
       updatedAt: placementInfo.updatedAt,
-      notes: placementInfo.notes
+      notes: placementInfo.notes,
+      damagedImg: placementInfo.damagedImg
     });
   }
 
@@ -193,6 +235,14 @@ function updateLocationAndLog(product, log) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const placeSheet = ss.getSheetByName(SHEET_PLACEMENT);
   const logSheet = ss.getSheetByName(SHEET_HISTORY);
+
+  // Save damaged photo to Google Drive if provided in base64 format
+  let damagedUrl = product.damagedImg || (log ? log.damagedImg : '');
+  if (damagedUrl && damagedUrl.startsWith('data:image')) {
+    damagedUrl = saveImageToDrive(damagedUrl, "Damaged_" + product.code + "_" + (new Date().getTime()) + ".jpg");
+    product.damagedImg = damagedUrl;
+    if (log) log.damagedImg = damagedUrl;
+  }
 
   const placeData = placeSheet.getDataRange().getValues();
   let foundRow = -1;
@@ -207,13 +257,14 @@ function updateLocationAndLog(product, log) {
   const now = new Date();
 
   if (foundRow > -1) {
-    placeSheet.getRange(foundRow, 2, 1, 6).setValues([[
+    placeSheet.getRange(foundRow, 2, 1, 7).setValues([[
       product.branch,
       product.location,
       product.status,
       product.updatedBy,
       now,
-      product.notes || ''
+      product.notes || '',
+      damagedUrl || ''
     ]]);
   } else {
     placeSheet.appendRow([
@@ -223,7 +274,8 @@ function updateLocationAndLog(product, log) {
       product.status,
       product.updatedBy,
       now,
-      product.notes || ''
+      product.notes || '',
+      damagedUrl || ''
     ]);
   }
 
@@ -237,7 +289,8 @@ function updateLocationAndLog(product, log) {
     product.location,
     product.status,
     product.updatedBy,
-    product.notes || ''
+    product.notes || '',
+    damagedUrl || ''
   ]);
 }
 
