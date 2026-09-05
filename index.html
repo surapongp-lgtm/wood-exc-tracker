@@ -287,6 +287,7 @@
                 <th>กำลังย้าย (Transit)</th>
                 <th>ชำรุด (Damaged)</th>
                 <th>รวมทั้งหมด</th>
+                <th style="text-align: right;">จัดการ</th>
               </tr>
             </thead>
             <tbody id="branch-summary-tbody">
@@ -827,6 +828,49 @@
             <button type="button" class="btn btn-secondary" onclick="closeAddBranchModal()">ยกเลิก</button>
             <button type="submit" class="btn btn-primary">
               <i class="fa-solid fa-plus-circle"></i> บันทึกสาขาใหม่
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Branch Modal (Admin Only) -->
+  <div class="modal-overlay" id="edit-branch-modal">
+    <div class="modal-content" style="max-width: 440px;">
+      <div class="modal-header">
+        <div class="modal-title">
+          <i class="fa-solid fa-pen-to-square" style="color: #b45309;"></i> แก้ไขข้อมูลสาขา/คลัง
+        </div>
+        <button class="btn-close" onclick="closeEditBranchModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="edit-branch-form" onsubmit="handleEditBranchSubmit(event)">
+          <div class="form-group">
+            <label class="form-label">รหัสสาขา (Branch ID)</label>
+            <input type="text" id="edit-branch-id" class="form-control" readonly style="background: #f1f5f9; font-family: monospace;">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">ชื่อสาขา / สถานที่จัดเก็บ <span style="color:red;">*</span></label>
+            <input type="text" id="edit-branch-name" class="form-control" placeholder="เช่น สาขาเชียงใหม่, บูธไบเทคบางนา" required>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">ที่อยู่ / รายละเอียดสถานที่เพิ่มเติม</label>
+            <input type="text" id="edit-branch-address" class="form-control" placeholder="เช่น อ.เมือง จ.เชียงใหม่">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Link ที่อยู่สาขา / พิกัด Google Maps</label>
+            <input type="url" id="edit-branch-map" class="form-control" placeholder="เช่น https://maps.app.goo.gl/AMmZtWbAc9dJ3dcJ9">
+            <span style="font-size: 0.75rem; color: var(--text-muted);">วางลิงก์ Google Maps เพื่ออัปเดตตำแหน่งปักหมุดบนแผนที่และนำทางให้อัตโนมัติ</span>
+          </div>
+
+          <div class="modal-footer" style="padding-right: 0; padding-bottom: 0;">
+            <button type="button" class="btn btn-secondary" onclick="closeEditBranchModal()">ยกเลิก</button>
+            <button type="submit" class="btn btn-primary">
+              <i class="fa-solid fa-floppy-disk"></i> บันทึกการแก้ไข
             </button>
           </div>
         </form>

@@ -121,9 +121,12 @@ function doPost(e) {
     } else if (action === 'addUser') {
       createNewUser(postData.user);
       return respondJson({ status: 'success', message: 'New user added' });
-    } else if (action === 'addBranch') {
+    } else if (action === 'addBranch' || action === 'editBranch') {
       createNewBranch(postData.branch);
-      return respondJson({ status: 'success', message: 'New branch added' });
+      return respondJson({ status: 'success', message: 'Branch saved' });
+    } else if (action === 'deleteBranch') {
+      deleteBranch(postData.branchId);
+      return respondJson({ status: 'success', message: 'Branch deleted' });
     } else if (action === 'updatePassword') {
       updateUserPassword(postData.username, postData.newPassword);
       return respondJson({ status: 'success', message: 'Password updated' });
@@ -236,13 +239,16 @@ function updateLocationAndLog(product, log) {
   const placeSheet = ss.getSheetByName(SHEET_PLACEMENT);
   const logSheet = ss.getSheetByName(SHEET_HISTORY);
 
-  // Save damaged photo to Google Drive if provided in base64 format
-  let damagedUrl = product.damagedImg || (log ? log.damagedImg : '');
-  if (damagedUrl && damagedUrl.startsWith('data:image')) {
-    damagedUrl = saveImageToDrive(damagedUrl, "Damaged_" + product.code + "_" + (new Date().getTime()) + ".jpg");
-    product.damagedImg = damagedUrl;
-    if (log) log.damagedImg = damagedUrl;
+  // Save damaged photo to Google Drive ONLY if status is Damaged
+  let damagedUrl = '';
+  if (product.status === 'Damaged') {
+    damagedUrl = product.damagedImg || (log ? log.damagedImg : '');
+    if (damagedUrl && damagedUrl.startsWith('data:image')) {
+      damagedUrl = saveImageToDrive(damagedUrl, "Damaged_" + product.code + "_" + (new Date().getTime()) + ".jpg");
+    }
   }
+  product.damagedImg = damagedUrl;
+  if (log) log.damagedImg = damagedUrl;
 
   const placeData = placeSheet.getDataRange().getValues();
   let foundRow = -1;
@@ -463,6 +469,19 @@ function createNewBranch(branch) {
   }
 }
 
+function deleteBranch(branchId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const bSheet = ss.getSheetByName(SHEET_BRANCHES);
+  const data = bSheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === branchId) {
+      bSheet.deleteRow(i + 1);
+      break;
+    }
+  }
+}
+
 function updateUserPassword(username, newPassword) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const uSheet = ss.getSheetByName(SHEET_USERS);
@@ -486,18 +505,41 @@ function getScanLogs() {
     const row = data[i];
     if (!row[0]) continue;
 
-    logs.push({
-      id: row[0],
-      timestamp: Utilities.formatDate(new Date(row[1]), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"),
-      code: row[2],
-      name: row[3],
-      action: row[4],
-      branch: row[5],
-      location: row[6],
-      status: row[7],
-      staff: row[8],
-      notes: row[9]
-    });
+    // Detect 13-column schema (0:id, 1:time, 2:code, 3:name, 4:action, 5:from_branch, 6:from_location, 7:to_branch, 8:to_location, 9:status, 10:staff, 11:notes, 12:damaged_img)
+    if (row.length >= 10 && (row[7] && row[7].toString().startsWith('BR-') || row[9] === 'On Display' || row[9] === 'In Storage' || row[9] === 'In Transit' || row[9] === 'Damaged')) {
+      logs.push({
+        id: row[0],
+        timestamp: Utilities.formatDate(new Date(row[1]), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"),
+        code: row[2],
+        name: row[3],
+        action: row[4],
+        fromBranchName: row[5] || '',
+        fromLocation: row[6] || '',
+        branch: row[7] || '',
+        location: row[8] || '',
+        status: row[9] || 'On Display',
+        staff: row[10] || '',
+        notes: row[11] || '',
+        damagedImg: row[12] || ''
+      });
+    } else {
+      // Legacy 10-column schema
+      logs.push({
+        id: row[0],
+        timestamp: Utilities.formatDate(new Date(row[1]), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"),
+        code: row[2],
+        name: row[3],
+        action: row[4],
+        fromBranchName: '',
+        fromLocation: '',
+        branch: row[5] || '',
+        location: row[6] || '',
+        status: row[7] || 'On Display',
+        staff: row[8] || '',
+        notes: row[9] || '',
+        damagedImg: ''
+      });
+    }
   }
 
   return logs;

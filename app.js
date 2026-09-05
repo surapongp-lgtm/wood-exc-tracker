@@ -518,6 +518,129 @@ async function handleAddBranchSubmit(e) {
   }
 }
 
+function openEditBranchModal(branchId) {
+  if (!appState.currentUser || appState.currentUser.role !== 'admin') {
+    showToast('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถแก้ไขสาขาได้', 'error');
+    return;
+  }
+
+  const b = appState.branches.find(x => x.id === branchId);
+  if (!b) return;
+
+  document.getElementById('edit-branch-id').value = b.id;
+  document.getElementById('edit-branch-name').value = b.name;
+  document.getElementById('edit-branch-address').value = b.address || '';
+  document.getElementById('edit-branch-map').value = b.mapLink || '';
+
+  document.getElementById('edit-branch-modal').classList.add('active');
+}
+
+function closeEditBranchModal() {
+  document.getElementById('edit-branch-modal').classList.remove('active');
+}
+
+async function handleEditBranchSubmit(e) {
+  e.preventDefault();
+  if (!appState.currentUser || appState.currentUser.role !== 'admin') {
+    showToast('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถแก้ไขสาขาได้', 'error');
+    return;
+  }
+
+  const bId = document.getElementById('edit-branch-id').value.trim();
+  const bName = document.getElementById('edit-branch-name').value.trim();
+  const bAddress = document.getElementById('edit-branch-address').value.trim();
+  const bMap = document.getElementById('edit-branch-map')?.value.trim() || '';
+
+  if (!bName) return;
+
+  const branch = appState.branches.find(x => x.id === bId);
+  if (!branch) return;
+
+  // Check duplicate branch name
+  if (appState.branches.some(b => b.id !== bId && b.name.toLowerCase() === bName.toLowerCase())) {
+    showToast(`ชื่อสาขา [${bName}] ซ้ำกับสาขาอื่นในระบบ`, 'error');
+    return;
+  }
+
+  branch.name = bName;
+  branch.address = bAddress || 'ไม่ระบุที่อยู่';
+  branch.mapLink = bMap;
+
+  // Resolve coordinates
+  let parsed = parseCoordinatesFromUrl(bMap);
+  let lat = parsed ? parsed.lat : null;
+  let lng = parsed ? parsed.lng : null;
+
+  if (!lat || !lng) {
+    const coords = resolveBranchCoordinates(branch);
+    if (coords && coords.lat && coords.lng) {
+      lat = coords.lat;
+      lng = coords.lng;
+    }
+  }
+
+  if (!lat || !lng) {
+    showToast('กำลังค้นหาพิกัดตำแหน่งบนแผนที่...', 'info');
+    const geo = await geocodeBranchLocation(bName, bAddress);
+    if (geo) {
+      lat = geo.lat;
+      lng = geo.lng;
+    }
+  }
+
+  if (lat && lng) {
+    branch.lat = lat;
+    branch.lng = lng;
+  }
+
+  saveState();
+  initDropdowns();
+  closeEditBranchModal();
+  renderCurrentTab();
+  showToast(`แก้ไขข้อมูลสาขา [${bName}] เรียบร้อยแล้ว`, 'success');
+
+  if (appState.gasUrl) {
+    syncEditBranchToGas(branch);
+  }
+}
+
+function deleteBranch(branchId) {
+  if (!appState.currentUser || appState.currentUser.role !== 'admin') {
+    showToast('เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถลบสาขาได้', 'error');
+    return;
+  }
+
+  const branch = appState.branches.find(b => b.id === branchId);
+  if (!branch) return;
+
+  // Safety Check 1: Check if sample items are currently at this branch
+  const itemsInBranch = appState.products.filter(p => p.branch === branchId);
+  if (itemsInBranch.length > 0) {
+    showToast(`ไม่สามารถลบสาขา [${branch.name}] ได้ เนื่องจากมีสินค้าตัวอย่างจัดเก็บอยู่ ${itemsInBranch.length} รายการ (โปรดย้ายสินค้าไปสาขาอื่นก่อนทำการลบ)`, 'error');
+    return;
+  }
+
+  // Safety Check 2: Minimum 1 branch must remain
+  if (appState.branches.length <= 1) {
+    showToast('ไม่สามารถลบสาขาทั้งหมดได้ ต้องมีอย่างน้อย 1 สาขาในระบบ', 'error');
+    return;
+  }
+
+  if (!confirm(`คุณต้องการลบสาขา [${branch.name}] (${branch.id}) ออกจากระบบ ใช่หรือไม่?`)) {
+    return;
+  }
+
+  appState.branches = appState.branches.filter(b => b.id !== branchId);
+  saveState();
+  initDropdowns();
+  renderCurrentTab();
+  showToast(`ลบสาขา [${branch.name}] เรียบร้อยแล้ว`, 'success');
+
+  if (appState.gasUrl) {
+    syncDeleteBranchToGas(branchId);
+  }
+}
+
 // Tab Switcher Logic with Permission Guard
 function switchTab(tabId) {
   const isAdmin = appState.currentUser && appState.currentUser.role === 'admin';
@@ -825,7 +948,7 @@ function openUpdateModalForCode(itemCode) {
 
   // Reset damaged photo section
   clearDamagedPhoto();
-  if (p.damagedImg) {
+  if (p.status === 'Damaged' && p.damagedImg) {
     document.getElementById('damaged-img-data').value = p.damagedImg;
     document.getElementById('damaged-img-preview').src = p.damagedImg;
     document.getElementById('damaged-preview-wrapper').style.display = 'block';
@@ -877,7 +1000,7 @@ function handleLocationUpdateSubmit(e) {
   product.updatedBy = staff;
   product.updatedAt = nowStr;
   product.notes = notes;
-  product.damagedImg = status === 'Damaged' ? damagedImg : (product.damagedImg || '');
+  product.damagedImg = (status === 'Damaged') ? damagedImg : '';
 
   const newLog = {
     id: 'LOG-' + Math.floor(100000 + Math.random() * 900000),
@@ -981,7 +1104,7 @@ function renderInventoryTable() {
       <td>${p.location || '-'}</td>
       <td>
         ${getStatusBadge(p.status)}
-        ${p.damagedImg ? `
+        ${(p.status === 'Damaged' && p.damagedImg) ? `
           <div style="margin-top: 0.375rem;">
             <a href="${p.damagedImg}" target="_blank" download class="btn btn-outline btn-sm" style="padding: 0.15rem 0.4rem; font-size: 0.72rem; color: #be123c; border-color: #f43f5e; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem;">
               <i class="fa-solid fa-download"></i> รูปสินค้าชำรุด
@@ -1237,6 +1360,8 @@ function renderDashboard() {
 
   const tbody = document.getElementById('branch-summary-tbody');
   if (tbody) {
+    const isAdmin = appState.currentUser && appState.currentUser.role === 'admin';
+
     tbody.innerHTML = appState.branches.map(b => {
       const bItems = appState.products.filter(p => p.branch === b.id);
       const bDisplay = bItems.filter(p => p.status === 'On Display').length;
@@ -1248,6 +1373,17 @@ function renderDashboard() {
         ? `<a href="${b.mapLink}" target="_blank" class="btn btn-outline btn-sm" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; color: #10b981; border-color: #a7f3d0; text-decoration: none;"><i class="fa-solid fa-map-location-dot"></i> ดูแผนที่</a>` 
         : `<span style="font-size: 0.75rem; color: var(--text-muted);">-</span>`;
 
+      const actionHtml = isAdmin ? `
+        <div style="display: inline-flex; gap: 0.375rem;">
+          <button class="btn btn-secondary btn-sm" onclick="openEditBranchModal('${b.id}')" title="แก้ไขข้อมูลสาขา">
+            <i class="fa-solid fa-pen-to-square"></i> แก้ไข
+          </button>
+          <button class="btn btn-outline btn-sm" style="color: #ef4444; border-color: #fca5a5;" onclick="deleteBranch('${b.id}')" title="ลบสาขา">
+            <i class="fa-solid fa-trash"></i> ลบ
+          </button>
+        </div>
+      ` : `<span style="color: var(--text-muted);">-</span>`;
+
       return `
         <tr>
           <td><code>${b.id}</code></td>
@@ -1258,6 +1394,7 @@ function renderDashboard() {
           <td><span class="badge badge-transit">${bTransit}</span></td>
           <td><span class="badge badge-damaged">${bDamaged}</span></td>
           <td><strong>${bItems.length} ชิ้น</strong></td>
+          <td style="text-align: right;">${actionHtml}</td>
         </tr>
       `;
     }).join('');
@@ -1376,8 +1513,11 @@ function renderLogsTable() {
   }
 
   tbody.innerHTML = pageLogs.map(l => {
-    const fromText = l.fromBranchName 
-      ? `<div><strong>${l.fromBranchName}</strong></div><div style="font-size:0.75rem; color:var(--text-muted);">${l.fromLocation || '-'}</div>`
+    const rawFromBranch = l.fromBranchName || l.fromBranch || '';
+    const fromBranchTitle = rawFromBranch ? getBranchName(rawFromBranch) : '';
+
+    const fromText = fromBranchTitle 
+      ? `<div><strong>${fromBranchTitle}</strong></div><div style="font-size:0.75rem; color:var(--text-muted);">${l.fromLocation || '-'}</div>`
       : `<span style="font-size: 0.75rem; color: var(--text-muted);">- (แรกเข้า)</span>`;
 
     const toText = `<div><strong>${l.branchName || getBranchName(l.branch)}</strong></div><div style="font-size:0.75rem; color:var(--text-muted);">${l.location || '-'}</div>`;
@@ -1751,6 +1891,42 @@ async function syncBranchToGas(newBranch) {
     });
   } catch (err) {
     console.warn('Failed sync branch to Google Sheets:', err);
+  }
+}
+
+async function syncEditBranchToGas(branch) {
+  if (!appState.gasUrl) return;
+
+  try {
+    await fetch(appState.gasUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'editBranch',
+        branch: branch
+      })
+    });
+  } catch (err) {
+    console.warn('Failed sync edit branch to Google Sheets:', err);
+  }
+}
+
+async function syncDeleteBranchToGas(branchId) {
+  if (!appState.gasUrl) return;
+
+  try {
+    await fetch(appState.gasUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'deleteBranch',
+        branchId: branchId
+      })
+    });
+  } catch (err) {
+    console.warn('Failed sync delete branch to Google Sheets:', err);
   }
 }
 
